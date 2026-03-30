@@ -1,6 +1,6 @@
-# HackTeam Nexus
+# BuildMyTeam
 
-HackTeam Nexus is a production-oriented web platform for colleges to manage hackathons, teams, participants, and collaboration resources in one place.
+BuildMyTeam is a production-oriented web platform for colleges to manage hackathons, teams, participants, and collaboration resources in one place.
 
 It provides:
 - Secure authentication with pending-user approval flow
@@ -102,7 +102,7 @@ Set values in `backend/.env`:
 
 - `NODE_ENV=development`
 - `PORT=5000`
-- `MONGODB_URI=mongodb://localhost:27017/hackteam_nexus`
+- `MONGODB_URI=mongodb://localhost:27017/buildmyteam`
 - `JWT_SECRET=<your_secret>`
 - `JWT_EXPIRES_IN=7d`
 - `CLIENT_URL=http://localhost:5173,http://localhost:5174`
@@ -221,6 +221,8 @@ Required Render env vars:
 Recommended Render env vars:
 - `JWT_EXPIRES_IN=7d`
 - `ADMIN_SYNC_ON_STARTUP=false`
+- `MONGO_SERVER_SELECTION_TIMEOUT_MS=15000`
+- `DB_FALLBACK_TO_MEMORY=true` (temporary safety fallback if Atlas is unreachable)
 
 Render deploy steps:
 
@@ -233,9 +235,9 @@ Render deploy steps:
 4. Set required environment variables in Render service.
 5. Deploy and wait for build to complete.
 6. Verify backend health URL:
-- https://your-backend.onrender.com/health
+- https://buildmyteam.onrender.com/health
 7. Verify API base URL:
-- https://your-backend.onrender.com/api/hackathons
+- https://buildmyteam.onrender.com/api/hackathons
 
 ## Frontend on Vercel
 
@@ -256,16 +258,18 @@ Vercel deploy steps:
 - Keep Root Directory as repository root (recommended), or
 - Set Root Directory to `frontend`.
 3. Set environment variable:
-- `VITE_API_URL=https://your-backend.onrender.com/api`
+- `VITE_API_URL=https://buildmyteam.onrender.com/api`
 4. Build and deploy.
 5. Open deployed app and test login/register.
+
+Note: this repository also includes a Vercel rewrite from `/api/*` to `https://buildmyteam.onrender.com/api/*`, so deployment can still work even if `VITE_API_URL` is not set.
 
 Required Vercel env var:
 - `VITE_API_URL=https://<your-render-backend>/api`
 
 After frontend deploy, update backend `CLIENT_URL` in Render:
 
-- `CLIENT_URL=https://your-frontend.vercel.app`
+- `CLIENT_URL=https://buildmyteam.vercel.app`
 
 If you need preview deployments to call backend, add additional origins in `CLIENT_URL` separated by commas.
 

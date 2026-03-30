@@ -3,11 +3,7 @@ import { clearAuthState, getStoredToken } from "../utils/storage";
 
 const apiUrlFromEnv = import.meta.env.VITE_API_URL;
 const isDevOrTest = import.meta.env.DEV || import.meta.env.MODE === "test";
-const API_BASE_URL = apiUrlFromEnv || (isDevOrTest ? "http://localhost:5000/api" : "");
-
-if (!API_BASE_URL) {
-  throw new Error("Missing VITE_API_URL for production build.");
-}
+const API_BASE_URL = apiUrlFromEnv || (isDevOrTest ? "http://localhost:5000/api" : "/api");
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -29,7 +25,7 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       clearAuthState();
-      globalThis.dispatchEvent(new Event("hackteam:unauthorized"));
+      globalThis.dispatchEvent(new Event("buildmyteam:unauthorized"));
     }
 
     return Promise.reject(error);

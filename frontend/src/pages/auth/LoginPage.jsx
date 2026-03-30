@@ -40,7 +40,7 @@ export function LoginPage() {
     <div className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-8 lg:px-8">
       <div className="grid w-full gap-8 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-2xl backdrop-blur lg:grid-cols-2 lg:p-10">
         <section className="rounded-2xl bg-slate-900 p-8 text-white">
-          <p className="text-xs uppercase tracking-[0.2em] text-teal-300">HackTeam Nexus</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-teal-300">BuildMyTeam</p>
           <h1 className="mt-3 text-3xl font-bold leading-tight">Coordinate hackathons, teams, and progress in one place.</h1>
           <p className="mt-4 text-sm text-slate-200">
             Leaders create teams, members request to join with a code, and admins keep participation clean and approved.

@@ -38,7 +38,7 @@ export function RegisterPage() {
       <div className="grid w-full gap-8 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-2xl backdrop-blur lg:grid-cols-2 lg:p-10">
         <section className="rounded-2xl bg-teal-700 p-8 text-white">
           <p className="text-xs uppercase tracking-[0.2em] text-teal-100">Get started</p>
-          <h1 className="mt-3 text-3xl font-bold leading-tight">Join HackTeam Nexus and collaborate smarter.</h1>
+          <h1 className="mt-3 text-3xl font-bold leading-tight">Join BuildMyTeam and collaborate smarter.</h1>
           <p className="mt-4 text-sm text-teal-50">
             Your account starts in pending status until your college admin approves access.
           </p>

@@ -26,7 +26,7 @@ export function Sidebar({ mobile = false, onNavigate = () => {} }) {
       }`}
     >
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">HackTeam Nexus</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">BuildMyTeam</p>
         <h2 className="mt-2 text-xl font-semibold text-slate-900">College Collaboration Hub</h2>
       </div>
 

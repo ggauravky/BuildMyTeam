@@ -62,10 +62,10 @@ export function AuthProvider({ children }) {
       logout();
     };
 
-    globalThis.addEventListener("hackteam:unauthorized", unauthorizedListener);
+    globalThis.addEventListener("buildmyteam:unauthorized", unauthorizedListener);
 
     return () => {
-      globalThis.removeEventListener("hackteam:unauthorized", unauthorizedListener);
+      globalThis.removeEventListener("buildmyteam:unauthorized", unauthorizedListener);
     };
   }, [logout]);
 

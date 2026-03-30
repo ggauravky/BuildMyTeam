@@ -17,7 +17,7 @@ export function HomePage() {
   return (
     <div className="mx-auto min-h-screen max-w-6xl px-4 py-8 lg:px-8 lg:py-12">
       <header className="rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-lg">
-        <p className="text-xs uppercase tracking-[0.2em] text-teal-700">HackTeam Nexus</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-teal-700">BuildMyTeam</p>
         <h1 className="mt-3 text-4xl font-bold tracking-tight text-slate-900">Build stronger hackathon teams.</h1>
         <p className="mt-4 max-w-3xl text-sm text-slate-600 lg:text-base">
           Discover college hackathons, create project teams, manage collaboration links, and track participation from a single platform.

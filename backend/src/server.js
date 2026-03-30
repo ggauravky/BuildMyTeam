@@ -16,7 +16,7 @@ const startServer = async () => {
 
     if (dbConnection.mode === "memory-fallback") {
       console.warn(
-        "Primary MongoDB connection failed. Using temporary in-memory database for local development."
+        "Primary MongoDB connection failed. Using temporary in-memory database fallback."
       );
       console.warn("Reason:", dbConnection.reason);
     }

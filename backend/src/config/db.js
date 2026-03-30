@@ -1,9 +1,5 @@
 const mongoose = require("mongoose");
-const {
-  nodeEnv,
-  dbFallbackToMemory,
-  mongoServerSelectionTimeoutMs,
-} = require("./env");
+const { dbFallbackToMemory, mongoServerSelectionTimeoutMs } = require("./env");
 
 let memoryServer = null;
 
@@ -18,7 +14,7 @@ const connectDatabase = async (mongoUri) => {
     await connectWithUri(mongoUri);
     return { mode: "primary" };
   } catch (primaryError) {
-    const shouldFallbackToMemory = nodeEnv === "development" && dbFallbackToMemory;
+    const shouldFallbackToMemory = dbFallbackToMemory;
 
     if (!shouldFallbackToMemory) {
       throw primaryError;
@@ -34,7 +30,7 @@ const connectDatabase = async (mongoUri) => {
     }
 
     memoryServer = await MongoMemoryServer.create();
-    const memoryUri = memoryServer.getUri("hackteam_nexus_dev");
+    const memoryUri = memoryServer.getUri("buildmyteam_dev");
 
     await connectWithUri(memoryUri);
 

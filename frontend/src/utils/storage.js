@@ -1,5 +1,5 @@
-const TOKEN_KEY = "hackteam_token";
-const USER_KEY = "hackteam_user";
+const TOKEN_KEY = "buildmyteam_token";
+const USER_KEY = "buildmyteam_user";
 
 export const saveAuthState = ({ token, user }) => {
   if (token) {

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: hackteam-nexus-backend
+    name: buildmyteam-backend
     runtime: node
     rootDir: backend
     buildCommand: npm ci
@@ -19,5 +19,9 @@ services:
         value: 7d
       - key: CLIENT_URL
         sync: false
+      - key: MONGO_SERVER_SELECTION_TIMEOUT_MS
+        value: 15000
+      - key: DB_FALLBACK_TO_MEMORY
+        value: true
       - key: ADMIN_SYNC_ON_STARTUP
         value: false

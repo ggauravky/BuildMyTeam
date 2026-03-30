@@ -81,7 +81,7 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", service: "hackteam-nexus-backend" });
+  res.json({ status: "ok", service: "buildmyteam-backend" });
 });
 
 app.use("/api", generalLimiter, routes);
