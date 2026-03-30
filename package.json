@@ -1,11 +1,11 @@
 {
-  "name": "buildmyteam-workspace",
+  "name": "buildmyteam-root",
   "private": true,
   "version": "1.0.0",
   "engines": {
     "node": ">=20 <25"
   },
-  "workspaces": [
-    "frontend"
-  ]
+  "scripts": {
+    "build": "npm install --prefix frontend && npm run build --prefix frontend"
+  }
 }
