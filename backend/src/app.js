@@ -55,6 +55,27 @@ const isAllowedConfiguredOrigin = (origin) => {
   });
 };
 
+const isAllowedBuildMyTeamVercelOrigin = (origin) => {
+  let originUrl;
+
+  try {
+    originUrl = new URL(normalizeOrigin(origin));
+  } catch {
+    return false;
+  }
+
+  if (originUrl.protocol !== "https:") {
+    return false;
+  }
+
+  if (originUrl.hostname === "buildmyteam.vercel.app") {
+    return true;
+  }
+
+  // Allow Vercel preview deployments for this project.
+  return /^buildmyteam-[a-z0-9-]+\.vercel\.app$/i.test(originUrl.hostname);
+};
+
 const isAllowedDevOrigin = (origin) =>
   nodeEnv !== "production" && /^http:\/\/localhost:\d+$/.test(normalizeOrigin(origin));
 
@@ -64,11 +85,16 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    if (isAllowedConfiguredOrigin(origin) || isAllowedDevOrigin(origin)) {
+    if (
+      isAllowedConfiguredOrigin(origin) ||
+      isAllowedDevOrigin(origin) ||
+      isAllowedBuildMyTeamVercelOrigin(origin)
+    ) {
       return callback(null, true);
     }
 
-    return callback(new Error(`CORS blocked for origin: ${origin}`));
+    // Return false instead of an error so blocked origins don't cause noisy 500s.
+    return callback(null, false);
   },
   credentials: true,
 };

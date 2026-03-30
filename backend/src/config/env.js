@@ -41,7 +41,11 @@ module.exports = {
   dbFallbackToMemory: parseBoolean(process.env.DB_FALLBACK_TO_MEMORY, nodeEnv === "development"),
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
-  clientUrl: process.env.CLIENT_URL || "http://localhost:5173,http://localhost:5174",
+  clientUrl:
+    process.env.CLIENT_URL ||
+    (nodeEnv === "production"
+      ? "https://buildmyteam.vercel.app"
+      : "http://localhost:5173,http://localhost:5174"),
   adminSyncOnStartup: parseBoolean(process.env.ADMIN_SYNC_ON_STARTUP, process.env.NODE_ENV !== "production"),
   adminName: process.env.ADMIN_NAME || "Platform Admin",
   adminEmail: process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase().trim() : "",

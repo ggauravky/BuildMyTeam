@@ -18,7 +18,7 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: CLIENT_URL
-        sync: false
+        value: https://buildmyteam.vercel.app
       - key: MONGO_SERVER_SELECTION_TIMEOUT_MS
         value: 15000
       - key: DB_FALLBACK_TO_MEMORY
