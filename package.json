@@ -1,0 +1,11 @@
+{
+  "name": "buildmyteam-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=20 <25"
+  },
+  "workspaces": [
+    "frontend"
+  ]
+}
