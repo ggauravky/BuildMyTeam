@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { adminApi } from "../api/admin.api";
 import { hackathonApi } from "../api/hackathon.api";
 import { PageHeader } from "../components/common/PageHeader";
@@ -29,6 +30,8 @@ const toDateInputValue = (value) => {
 export function AdminPanelPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("pending");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [userSearch, setUserSearch] = useState("");
   const [hackathonForm, setHackathonForm] = useState(initialHackathon);
   const [editingHackathonId, setEditingHackathonId] = useState("");
   const [hackathonEditForm, setHackathonEditForm] = useState(initialHackathon);
@@ -41,8 +44,15 @@ export function AdminPanelPage() {
   });
 
   const usersQuery = useQuery({
-    queryKey: ["admin-users", statusFilter],
-    queryFn: () => adminApi.listUsers(statusFilter ? { status: statusFilter } : {}),
+    queryKey: ["admin-users", statusFilter, roleFilter, userSearch],
+    queryFn: () =>
+      adminApi.listUsers({
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(roleFilter ? { role: roleFilter } : {}),
+        ...(userSearch.trim() ? { q: userSearch.trim() } : {}),
+        limit: 100,
+        page: 1,
+      }),
   });
 
   const teamsQuery = useQuery({
@@ -232,17 +242,39 @@ export function AdminPanelPage() {
         <article className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-slate-900">User Approvals</h2>
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-            >
-              <option value="pending">Pending</option>
-              <option value="">All statuses</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-            </select>
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              >
+                <option value="pending">Pending</option>
+                <option value="">All statuses</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+
+              <select
+                value={roleFilter}
+                onChange={(event) => setRoleFilter(event.target.value)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              >
+                <option value="">All roles</option>
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
           </div>
+
+          <label className="mb-3 block text-sm font-semibold text-slate-700">
+            Search users
+            <input
+              value={userSearch}
+              onChange={(event) => setUserSearch(event.target.value)}
+              placeholder="Search by name, email, or username"
+              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+            />
+          </label>
 
           {usersQuery.isLoading ? (
             <p className="text-sm text-slate-600">Loading users...</p>
@@ -258,10 +290,41 @@ export function AdminPanelPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{item.name}</p>
+                    <p className="text-xs font-semibold text-slate-600">@{item.username || "unknown"}</p>
                     <p className="text-xs text-slate-500">{item.email}</p>
                   </div>
                   <StatusBadge value={item.status} />
                 </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold capitalize">
+                    {item.role}
+                  </span>
+                  <span>Teams: {item.teamCount ?? item.teams?.length ?? 0}</span>
+                </div>
+
+                {item.headline ? <p className="mt-2 text-xs text-slate-700">{item.headline}</p> : null}
+
+                {item.username ? (
+                  <p className="mt-2 text-xs">
+                    <Link to={`/profile/${item.username}`} className="font-semibold text-teal-700 hover:underline">
+                      View public profile
+                    </Link>
+                  </p>
+                ) : null}
+
+                {(item.skills || []).length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {item.skills.slice(0, 5).map((skill) => (
+                      <span
+                        key={`${item._id}-${skill}`}
+                        className="rounded-full border border-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
 
                 {item.status === "pending" ? (
                   <div className="mt-2 flex gap-2">

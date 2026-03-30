@@ -50,6 +50,11 @@ export function TeamsPage() {
     queryFn: () => hackathonApi.list(),
   });
 
+  const myJoinRequestsQuery = useQuery({
+    queryKey: ["my-join-requests"],
+    queryFn: () => joinRequestApi.listMine(),
+  });
+
   const joinMutation = useMutation({
     mutationFn: (code) => joinRequestApi.createByCode(code),
     onSuccess: () => {
@@ -62,8 +67,23 @@ export function TeamsPage() {
     },
   });
 
+  const cancelRequestMutation = useMutation({
+    mutationFn: (joinRequestId) => joinRequestApi.cancel(joinRequestId),
+    onSuccess: () => {
+      setFeedback("Join request cancelled successfully.");
+      queryClient.invalidateQueries({ queryKey: ["my-join-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (error) => {
+      setFeedback(error.response?.data?.message || "Could not cancel join request.");
+    },
+  });
+
   const teams = teamsQuery.data?.teams || [];
   const hackathons = hackathonsQuery.data?.hackathons || [];
+  const pendingMyRequests = (myJoinRequestsQuery.data?.requests || []).filter(
+    (request) => request.status === "pending"
+  );
 
   const onJoinSubmit = (event) => {
     event.preventDefault();
@@ -145,6 +165,42 @@ export function TeamsPage() {
           <QRCodeScanner onCodeDetected={(value) => setJoinCode(normalizeJoinCodeInput(value))} />
 
           {feedback ? <p className="text-sm text-slate-700">{feedback}</p> : null}
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Your Pending Requests
+            </p>
+
+            {myJoinRequestsQuery.isLoading ? (
+              <p className="mt-2 text-sm text-slate-500">Loading requests...</p>
+            ) : null}
+
+            {!myJoinRequestsQuery.isLoading && pendingMyRequests.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">No pending requests.</p>
+            ) : null}
+
+            <ul className="mt-2 space-y-2">
+              {pendingMyRequests.slice(0, 4).map((request) => (
+                <li
+                  key={request._id}
+                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-700"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-900">
+                      {request.team?.name || "Unknown team"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => cancelRequestMutation.mutate(request._id)}
+                      className="rounded-lg border border-rose-300 px-2 py-1 font-semibold text-rose-700 hover:bg-rose-50"
+                    >
+                      {cancelRequestMutation.isPending ? "Cancelling..." : "Cancel"}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
 

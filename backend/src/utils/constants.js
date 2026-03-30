@@ -18,6 +18,7 @@ const JOIN_REQUEST_STATUSES = {
   PENDING: "pending",
   APPROVED: "approved",
   REJECTED: "rejected",
+  CANCELLED: "cancelled",
 };
 
 const NOTIFICATION_TYPES = {

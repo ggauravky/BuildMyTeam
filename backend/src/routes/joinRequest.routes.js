@@ -4,6 +4,7 @@ const {
   listPendingRequestsForTeam,
   reviewJoinRequest,
   listMyJoinRequests,
+  cancelMyJoinRequest,
 } = require("../controllers/joinRequest.controller");
 const { requireAuth } = require("../middleware/auth.middleware");
 const { requireApprovedUser } = require("../middleware/requireApproved.middleware");
@@ -19,6 +20,7 @@ router.use(requireAuth, requireApprovedUser);
 
 router.get("/my", listMyJoinRequests);
 router.post("/by-code", joinByCodeLimiter, validate(joinByCodeSchema), createJoinRequestByCode);
+router.patch("/:id/cancel", cancelMyJoinRequest);
 router.get(
   "/team/:teamId",
   requireTeamLeaderOrAdmin((req) => req.params.teamId),

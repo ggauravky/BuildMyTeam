@@ -48,6 +48,8 @@ function App() {
         }
       />
 
+      <Route path="/profile/:username" element={<ProfilePage />} />
+
       <Route
         path="/join-team"
         element={

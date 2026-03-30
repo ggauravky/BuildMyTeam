@@ -9,6 +9,10 @@ export const joinRequestApi = {
     const { data } = await apiClient.get("/join-requests/my");
     return data;
   },
+  cancel: async (joinRequestId) => {
+    const { data } = await apiClient.patch(`/join-requests/${joinRequestId}/cancel`);
+    return data;
+  },
   listPendingForTeam: async (teamId) => {
     const { data } = await apiClient.get(`/join-requests/team/${teamId}`);
     return data;

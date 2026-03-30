@@ -2,6 +2,7 @@ const statusStyles = {
   approved: "bg-emerald-100 text-emerald-700",
   pending: "bg-amber-100 text-amber-700",
   rejected: "bg-rose-100 text-rose-700",
+  cancelled: "bg-slate-200 text-slate-700",
   admin: "bg-blue-100 text-blue-700",
 };
 

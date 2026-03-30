@@ -86,7 +86,7 @@ const listPendingRequestsForTeam = asyncHandler(async (req, res) => {
     team: teamId,
     status: JOIN_REQUEST_STATUSES.PENDING,
   })
-    .populate("user", "name email status")
+    .populate("user", "name email username status")
     .sort({ createdAt: -1 });
 
   return res.json({ requests });
@@ -194,9 +194,47 @@ const listMyJoinRequests = asyncHandler(async (req, res) => {
   return res.json({ requests });
 });
 
+const cancelMyJoinRequest = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const joinRequest = await JoinRequest.findById(id).populate("team", "name leader");
+
+  if (!joinRequest) {
+    return res.status(404).json({ message: "Join request not found." });
+  }
+
+  if (joinRequest.user.toString() !== req.user.id) {
+    return res.status(403).json({ message: "Not authorized to cancel this join request." });
+  }
+
+  if (joinRequest.status !== JOIN_REQUEST_STATUSES.PENDING) {
+    return res.status(400).json({ message: "Only pending requests can be cancelled." });
+  }
+
+  joinRequest.status = JOIN_REQUEST_STATUSES.CANCELLED;
+  joinRequest.reviewedBy = req.user.id;
+  joinRequest.reviewedAt = new Date();
+  await joinRequest.save();
+
+  if (joinRequest.team?.leader && joinRequest.team.leader.toString() !== req.user.id) {
+    await createNotification({
+      user: joinRequest.team.leader,
+      type: NOTIFICATION_TYPES.SYSTEM,
+      message: `A join request for ${joinRequest.team.name} was cancelled by the requester.`,
+      data: { teamId: joinRequest.team._id, joinRequestId: joinRequest._id },
+    });
+  }
+
+  return res.json({
+    message: "Join request cancelled successfully.",
+    joinRequest,
+  });
+});
+
 module.exports = {
   createJoinRequestByCode,
   listPendingRequestsForTeam,
   reviewJoinRequest,
   listMyJoinRequests,
+  cancelMyJoinRequest,
 };

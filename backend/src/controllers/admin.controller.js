@@ -5,6 +5,8 @@ const Notification = require("../models/Notification");
 const asyncHandler = require("../utils/asyncHandler");
 const { NOTIFICATION_TYPES, USER_STATUSES } = require("../utils/constants");
 
+const escapeRegex = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+
 const listUsers = asyncHandler(async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
   const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
@@ -13,6 +15,20 @@ const listUsers = asyncHandler(async (req, res) => {
   const filter = {};
   if (req.query.status) {
     filter.status = req.query.status;
+  }
+
+  if (req.query.role) {
+    filter.role = req.query.role;
+  }
+
+  const query = String(req.query.q || "").trim();
+  if (query) {
+    const pattern = escapeRegex(query);
+    filter.$or = [
+      { name: { $regex: pattern, $options: "i" } },
+      { email: { $regex: pattern, $options: "i" } },
+      { username: { $regex: pattern, $options: "i" } },
+    ];
   }
 
   const statusPriority = {
@@ -37,9 +53,15 @@ const listUsers = asyncHandler(async (req, res) => {
         $project: {
           name: 1,
           email: 1,
+          username: 1,
           role: 1,
           status: 1,
+          headline: 1,
+          bio: 1,
+          skills: 1,
+          socialLinks: 1,
           teams: 1,
+          teamCount: { $size: { $ifNull: ["$teams", []] } },
           createdAt: 1,
         },
       },
