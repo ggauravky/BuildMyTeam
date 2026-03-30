@@ -1,10 +1,11 @@
-import { LayoutDashboard, ShieldCheck, Trophy, Users, UserCircle2, UserPlus2 } from "lucide-react";
+import { CalendarDays, LayoutDashboard, ShieldCheck, Trophy, Users, UserCircle2, UserPlus2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 
 const baseLinks = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/hackathons", label: "Hackathons", icon: Trophy },
+  { to: "/events", label: "Events", icon: CalendarDays },
   { to: "/teams", label: "Teams", icon: Users },
   { to: "/teams/create", label: "Create Team", icon: UserPlus2 },
   { to: "/profile", label: "Profile", icon: UserCircle2 },

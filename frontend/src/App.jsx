@@ -3,6 +3,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { AdminPanelPage } from "./pages/AdminPanelPage";
 import { CreateTeamPage } from "./pages/CreateTeamPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { EventsPage } from "./pages/EventsPage";
 import { HackathonsPage } from "./pages/HackathonsPage";
 import { HomePage } from "./pages/HomePage";
 import { JoinTeamEntryPage } from "./pages/JoinTeamEntryPage";
@@ -90,6 +91,7 @@ function App() {
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/hackathons" element={<HackathonsPage />} />
+        <Route path="/events" element={<EventsPage />} />
         <Route path="/teams/create" element={<CreateTeamPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route

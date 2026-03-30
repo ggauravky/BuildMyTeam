@@ -4,6 +4,8 @@ const {
   updateUserStatus,
   listTeams,
   listHackathons,
+  listEvents,
+  removeTeamMemberByAdmin,
 } = require("../controllers/admin.controller");
 const { requireAuth } = require("../middleware/auth.middleware");
 const { requireGlobalRole } = require("../middleware/role.middleware");
@@ -18,6 +20,8 @@ router.use(requireAuth, requireGlobalRole(GLOBAL_ROLES.ADMIN));
 router.get("/users", listUsers);
 router.patch("/users/:id/status", validate(updateUserStatusSchema), updateUserStatus);
 router.get("/teams", listTeams);
+router.delete("/teams/:teamId/members/:userId", removeTeamMemberByAdmin);
 router.get("/hackathons", listHackathons);
+router.get("/events", listEvents);
 
 module.exports = router;

@@ -2,6 +2,10 @@ import { ExternalLink, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export function TeamCard({ team }) {
+  const isEventTeam = team.trackType === "event";
+  const contextLabel = isEventTeam ? "Event" : "Hackathon";
+  const contextLink = isEventTeam ? team.eventLink : team.hackathonLink;
+
   return (
     <article className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -19,15 +23,17 @@ export function TeamCard({ team }) {
           <Users className="h-4 w-4" />
           {team.members.length}/{team.maxSize} members
         </p>
-        <a
-          href={team.hackathonLink}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-2 text-teal-700 hover:underline"
-        >
-          <ExternalLink className="h-4 w-4" />
-          Hackathon Link
-        </a>
+        {contextLink ? (
+          <a
+            href={contextLink}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 text-teal-700 hover:underline"
+          >
+            <ExternalLink className="h-4 w-4" />
+            {contextLabel} Link
+          </a>
+        ) : null}
       </div>
 
       <div className="mt-4">

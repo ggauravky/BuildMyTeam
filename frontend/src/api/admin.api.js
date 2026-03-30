@@ -17,4 +17,12 @@ export const adminApi = {
     const { data } = await apiClient.get("/admin/hackathons");
     return data;
   },
+  listEvents: async () => {
+    const { data } = await apiClient.get("/admin/events");
+    return data;
+  },
+  removeTeamMember: async (teamId, userId) => {
+    const { data } = await apiClient.delete(`/admin/teams/${teamId}/members/${userId}`);
+    return data;
+  },
 };

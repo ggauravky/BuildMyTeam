@@ -1,9 +1,14 @@
 const User = require("../models/User");
 const Team = require("../models/Team");
 const Hackathon = require("../models/Hackathon");
+const Event = require("../models/Event");
 const Notification = require("../models/Notification");
 const asyncHandler = require("../utils/asyncHandler");
-const { NOTIFICATION_TYPES, USER_STATUSES } = require("../utils/constants");
+const {
+  NOTIFICATION_TYPES,
+  TEAM_MEMBER_ROLES,
+  USER_STATUSES,
+} = require("../utils/constants");
 
 const escapeRegex = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 
@@ -119,6 +124,8 @@ const listTeams = asyncHandler(async (req, res) => {
   const teams = await Team.find()
     .populate("leader", "name email")
     .populate("hackathon", "title date")
+    .populate("event", "title date")
+    .populate("members.user", "name email username status")
     .sort({ createdAt: -1 });
 
   return res.json({ teams });
@@ -129,9 +136,62 @@ const listHackathons = asyncHandler(async (req, res) => {
   return res.json({ hackathons });
 });
 
+const listEvents = asyncHandler(async (req, res) => {
+  const events = await Event.find().sort({ date: 1 });
+  return res.json({ events });
+});
+
+const removeTeamMemberByAdmin = asyncHandler(async (req, res) => {
+  const { teamId, userId } = req.params;
+
+  const team = await Team.findById(teamId).populate("members.user", "name email");
+
+  if (!team) {
+    return res.status(404).json({ message: "Team not found." });
+  }
+
+  if (team.leader.toString() === userId) {
+    return res.status(400).json({
+      message: "Cannot remove team leader directly. Transfer leadership first.",
+    });
+  }
+
+  const targetMember = team.members.find((entry) => entry.user?._id?.toString() === userId);
+
+  if (!targetMember) {
+    return res.status(404).json({ message: "Member not found in this team." });
+  }
+
+  if (targetMember.role === TEAM_MEMBER_ROLES.LEADER) {
+    return res.status(400).json({
+      message: "Cannot remove team leader directly. Transfer leadership first.",
+    });
+  }
+
+  team.members = team.members.filter((entry) => entry.user?._id?.toString() !== userId);
+  await team.save();
+
+  await User.findByIdAndUpdate(userId, { $pull: { teams: team._id } });
+
+  await Notification.create({
+    user: userId,
+    type: NOTIFICATION_TYPES.TEAM_UPDATE,
+    message: `You were removed from team ${team.name} by an admin.`,
+    data: { teamId: team._id },
+  });
+
+  return res.json({
+    message: "Member removed successfully.",
+    teamId: team._id,
+    userId,
+  });
+});
+
 module.exports = {
   listUsers,
   updateUserStatus,
   listTeams,
   listHackathons,
+  listEvents,
+  removeTeamMemberByAdmin,
 };

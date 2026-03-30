@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { TEAM_MEMBER_ROLES } = require("../utils/constants");
+const { TEAM_MEMBER_ROLES, TEAM_TRACK_TYPES } = require("../utils/constants");
 
 const teamMemberSchema = new mongoose.Schema(
   {
@@ -31,15 +31,33 @@ const teamSchema = new mongoose.Schema(
       maxlength: 120,
       index: true,
     },
+    trackType: {
+      type: String,
+      enum: Object.values(TEAM_TRACK_TYPES),
+      default: TEAM_TRACK_TYPES.HACKATHON,
+      index: true,
+    },
     hackathon: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Hackathon",
       default: null,
       index: true,
     },
+    event: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Event",
+      default: null,
+      index: true,
+    },
     hackathonLink: {
       type: String,
-      required: true,
+      default: "",
+      trim: true,
+      index: true,
+    },
+    eventLink: {
+      type: String,
+      default: "",
       trim: true,
       index: true,
     },

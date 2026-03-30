@@ -2,11 +2,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { adminApi } from "../api/admin.api";
+import { eventApi } from "../api/event.api";
 import { hackathonApi } from "../api/hackathon.api";
 import { PageHeader } from "../components/common/PageHeader";
 import { StatusBadge } from "../components/common/StatusBadge";
 
 const initialHackathon = {
+  title: "",
+  description: "",
+  date: "",
+  link: "",
+};
+
+const initialEvent = {
   title: "",
   description: "",
   date: "",
@@ -35,6 +43,9 @@ export function AdminPanelPage() {
   const [hackathonForm, setHackathonForm] = useState(initialHackathon);
   const [editingHackathonId, setEditingHackathonId] = useState("");
   const [hackathonEditForm, setHackathonEditForm] = useState(initialHackathon);
+  const [eventForm, setEventForm] = useState(initialEvent);
+  const [editingEventId, setEditingEventId] = useState("");
+  const [eventEditForm, setEventEditForm] = useState(initialEvent);
   const [message, setMessage] = useState("");
 
   const pendingUsersQuery = useQuery({
@@ -63,6 +74,11 @@ export function AdminPanelPage() {
   const hackathonsQuery = useQuery({
     queryKey: ["admin-hackathons"],
     queryFn: () => adminApi.listHackathons(),
+  });
+
+  const eventsQuery = useQuery({
+    queryKey: ["admin-events"],
+    queryFn: () => adminApi.listEvents(),
   });
 
   const updateUserMutation = useMutation({
@@ -124,6 +140,61 @@ export function AdminPanelPage() {
     },
   });
 
+  const createEventMutation = useMutation({
+    mutationFn: (payload) => eventApi.create(payload),
+    onSuccess: () => {
+      setMessage("Event created.");
+      setEventForm(initialEvent);
+      queryClient.invalidateQueries({ queryKey: ["admin-events"] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+    },
+    onError: (error) => {
+      setMessage(error.response?.data?.message || "Unable to create event.");
+    },
+  });
+
+  const updateEventMutation = useMutation({
+    mutationFn: ({ id, payload }) => eventApi.update(id, payload),
+    onSuccess: () => {
+      setMessage("Event updated.");
+      setEditingEventId("");
+      setEventEditForm(initialEvent);
+      queryClient.invalidateQueries({ queryKey: ["admin-events"] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+    },
+    onError: (error) => {
+      setMessage(error.response?.data?.message || "Unable to update event.");
+    },
+  });
+
+  const deleteEventMutation = useMutation({
+    mutationFn: (id) => eventApi.remove(id),
+    onSuccess: () => {
+      setMessage("Event deleted.");
+      if (editingEventId) {
+        setEditingEventId("");
+        setEventEditForm(initialEvent);
+      }
+      queryClient.invalidateQueries({ queryKey: ["admin-events"] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+    },
+    onError: (error) => {
+      setMessage(error.response?.data?.message || "Unable to delete event.");
+    },
+  });
+
+  const removeTeamMemberMutation = useMutation({
+    mutationFn: ({ teamId, userId }) => adminApi.removeTeamMember(teamId, userId),
+    onSuccess: () => {
+      setMessage("Member removed from team.");
+      queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (error) => {
+      setMessage(error.response?.data?.message || "Unable to remove member.");
+    },
+  });
+
   const onHackathonChange = (event) => {
     const { name, value } = event.target;
     setHackathonForm((prev) => ({ ...prev, [name]: value }));
@@ -179,14 +250,68 @@ export function AdminPanelPage() {
     deleteHackathonMutation.mutate(hackathon._id);
   };
 
+  const onEventChange = (event) => {
+    const { name, value } = event.target;
+    setEventForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const onEventSubmit = (event) => {
+    event.preventDefault();
+    createEventMutation.mutate(eventForm);
+  };
+
+  const onEventEditChange = (event) => {
+    const { name, value } = event.target;
+    setEventEditForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const onStartEventEdit = (item) => {
+    setEditingEventId(item._id);
+    setEventEditForm({
+      title: item.title,
+      description: item.description,
+      date: toDateInputValue(item.date),
+      link: item.link,
+    });
+  };
+
+  const onCancelEventEdit = () => {
+    setEditingEventId("");
+    setEventEditForm(initialEvent);
+  };
+
+  const onEventEditSubmit = (event) => {
+    event.preventDefault();
+
+    if (!editingEventId) {
+      return;
+    }
+
+    updateEventMutation.mutate({
+      id: editingEventId,
+      payload: eventEditForm,
+    });
+  };
+
+  const onDeleteEvent = (item) => {
+    const confirmed = globalThis.confirm(`Delete event "${item.title}"? This cannot be undone.`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    deleteEventMutation.mutate(item._id);
+  };
+
   const users = usersQuery.data?.users || [];
   const pendingUsers = pendingUsersQuery.data?.users || [];
   const teams = teamsQuery.data?.teams || [];
   const hackathons = hackathonsQuery.data?.hackathons || [];
+  const events = eventsQuery.data?.events || [];
 
   return (
     <div>
-      <PageHeader title="Admin Panel" description="Approve users, monitor teams, and manage hackathon listings." />
+      <PageHeader title="Admin Panel" description="Approve users, manage hackathons/events, and control team members." />
 
       {message ? <p className="mb-4 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</p> : null}
 
@@ -238,7 +363,7 @@ export function AdminPanelPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
+      <section className="grid gap-4 xl:grid-cols-3">
         <article className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-slate-900">User Approvals</h2>
@@ -350,7 +475,7 @@ export function AdminPanelPage() {
         </article>
 
         <article className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="text-lg font-semibold text-slate-900">Create Hackathon</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Manage Hackathons</h2>
 
           <form className="mt-3 grid gap-3" onSubmit={onHackathonSubmit}>
             <input name="title" value={hackathonForm.title} onChange={onHackathonChange} required placeholder="Title" className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
@@ -442,16 +567,157 @@ export function AdminPanelPage() {
             ))}
           </div>
         </article>
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-lg font-semibold text-slate-900">Manage Events</h2>
+
+          <form className="mt-3 grid gap-3" onSubmit={onEventSubmit}>
+            <input name="title" value={eventForm.title} onChange={onEventChange} required placeholder="Title" className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+            <textarea name="description" value={eventForm.description} onChange={onEventChange} required placeholder="Description" className="min-h-20 rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+            <input type="date" name="date" value={eventForm.date} onChange={onEventChange} required className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+            <input type="url" name="link" value={eventForm.link} onChange={onEventChange} required placeholder="Event Link" className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+
+            <button type="submit" className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">
+              {createEventMutation.isPending ? "Saving..." : "Add Event"}
+            </button>
+          </form>
+
+          <div className="mt-4 space-y-2">
+            {events.map((item) => (
+              <div key={item._id} className="rounded-xl border border-slate-200 px-3 py-2">
+                {editingEventId === item._id ? (
+                  <form className="grid gap-2" onSubmit={onEventEditSubmit}>
+                    <input
+                      name="title"
+                      value={eventEditForm.title}
+                      onChange={onEventEditChange}
+                      required
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    />
+                    <textarea
+                      name="description"
+                      value={eventEditForm.description}
+                      onChange={onEventEditChange}
+                      required
+                      className="min-h-20 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="date"
+                      name="date"
+                      value={eventEditForm.date}
+                      onChange={onEventEditChange}
+                      required
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="url"
+                      name="link"
+                      value={eventEditForm.link}
+                      onChange={onEventEditChange}
+                      required
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    />
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="submit"
+                        className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700"
+                      >
+                        {updateEventMutation.isPending ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onCancelEventEdit}
+                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                    <p className="text-xs text-slate-500">{new Date(item.date).toLocaleDateString()}</p>
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onStartEventEdit(item)}
+                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteEvent(item)}
+                        className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                      >
+                        {deleteEventMutation.isPending ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </article>
       </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="text-lg font-semibold text-slate-900">All Teams Overview</h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <h2 className="text-lg font-semibold text-slate-900">Team Member Management</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          View every member email clearly and remove members when needed.
+        </p>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
           {teams.map((team) => (
-            <div key={team._id} className="rounded-xl border border-slate-200 px-3 py-2">
+            <div key={team._id} className="rounded-xl border border-slate-200 px-3 py-3">
               <p className="text-sm font-semibold text-slate-900">{team.name}</p>
+              <p className="text-xs text-slate-500">
+                Type: {team.trackType === "event" ? "Event" : "Hackathon"}
+              </p>
+              <p className="text-xs text-slate-500">
+                Context: {team.trackType === "event" ? (team.event?.title || "External event") : (team.hackathon?.title || "External hackathon")}
+              </p>
               <p className="text-xs text-slate-500">Leader: {team.leader?.name || "Unknown"}</p>
               <p className="text-xs text-slate-500">Members: {team.members.length}/{team.maxSize}</p>
+
+              <div className="mt-2 space-y-2">
+                {team.members.map((member) => {
+                  const memberId = typeof member.user === "string" ? member.user : member.user?._id;
+                  const memberName = typeof member.user === "string" ? "Unknown" : member.user?.name;
+                  const memberEmail = typeof member.user === "string" ? "No email" : member.user?.email;
+                  const isLeader = member.role === "leader";
+
+                  return (
+                    <div key={`${team._id}-${memberId}`} className="flex items-center justify-between rounded-lg border border-slate-200 px-2.5 py-2">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-900">{memberName || "Unknown"}</p>
+                        <p className="text-xs text-slate-500">{memberEmail || "No email"}</p>
+                      </div>
+
+                      {isLeader ? (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                          Leader
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeTeamMemberMutation.mutate({
+                              teamId: team._id,
+                              userId: memberId,
+                            })
+                          }
+                          className="rounded-lg border border-rose-300 px-2 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-50"
+                        >
+                          {removeTeamMemberMutation.isPending ? "Removing..." : "Kick"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>

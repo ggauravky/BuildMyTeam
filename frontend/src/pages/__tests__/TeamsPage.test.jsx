@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
+import { eventApi } from "../../api/event.api";
 import { hackathonApi } from "../../api/hackathon.api";
 import { joinRequestApi } from "../../api/joinRequest.api";
 import { teamApi } from "../../api/team.api";
@@ -19,9 +20,17 @@ vi.mock("../../api/hackathon.api", () => ({
   },
 }));
 
+vi.mock("../../api/event.api", () => ({
+  eventApi: {
+    list: vi.fn(),
+  },
+}));
+
 vi.mock("../../api/joinRequest.api", () => ({
   joinRequestApi: {
     createByCode: vi.fn(),
+    listMine: vi.fn(),
+    cancel: vi.fn(),
   },
 }));
 
@@ -62,7 +71,10 @@ describe("TeamsPage", () => {
     vi.clearAllMocks();
     teamApi.list.mockResolvedValue({ teams: [] });
     hackathonApi.list.mockResolvedValue({ hackathons: [] });
+    eventApi.list.mockResolvedValue({ events: [] });
     joinRequestApi.createByCode.mockResolvedValue({ message: "ok" });
+    joinRequestApi.listMine.mockResolvedValue({ requests: [] });
+    joinRequestApi.cancel.mockResolvedValue({ message: "ok" });
   });
 
   test("blocks invalid join code submission", async () => {
@@ -96,7 +108,9 @@ describe("TeamsPage", () => {
     await waitFor(() => {
       expect(teamApi.list).toHaveBeenLastCalledWith({
         search: "Alpha Builders",
+        trackType: "",
         hackathon: "",
+        event: "",
       });
     }, { timeout: 1200 });
   });

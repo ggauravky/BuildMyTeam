@@ -3,10 +3,16 @@ const QRCode = require("qrcode");
 const Team = require("../models/Team");
 const User = require("../models/User");
 const Hackathon = require("../models/Hackathon");
+const Event = require("../models/Event");
 const JoinRequest = require("../models/JoinRequest");
 const asyncHandler = require("../utils/asyncHandler");
 const { generateUniqueJoinCode } = require("../utils/generateJoinCode");
-const { GLOBAL_ROLES, NOTIFICATION_TYPES, TEAM_MEMBER_ROLES } = require("../utils/constants");
+const {
+  GLOBAL_ROLES,
+  NOTIFICATION_TYPES,
+  TEAM_MEMBER_ROLES,
+  TEAM_TRACK_TYPES,
+} = require("../utils/constants");
 const { createBulkNotifications, createNotification } = require("../services/notification.service");
 const { clientUrl } = require("../config/env");
 
@@ -47,7 +53,8 @@ const populateTeamQuery = (query) =>
   query
     .populate("leader", "name email")
     .populate("members.user", "name email status")
-    .populate("hackathon", "title date link");
+    .populate("hackathon", "title date link")
+    .populate("event", "title date link");
 
 const resolveHackathonForUpdate = async (hackathonId) => {
   if (hackathonId === undefined) {
@@ -79,10 +86,41 @@ const resolveHackathonForUpdate = async (hackathonId) => {
   return { shouldUpdate: true, value: hackathon._id };
 };
 
+const resolveEventForUpdate = async (eventId) => {
+  if (eventId === undefined) {
+    return { shouldUpdate: false };
+  }
+
+  if (eventId === null) {
+    return { shouldUpdate: true, value: null };
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(eventId)) {
+    return {
+      shouldUpdate: true,
+      error: "Invalid event id.",
+      statusCode: 400,
+    };
+  }
+
+  const event = await Event.findById(eventId);
+
+  if (!event) {
+    return {
+      shouldUpdate: true,
+      error: "Selected event not found.",
+      statusCode: 404,
+    };
+  }
+
+  return { shouldUpdate: true, value: event._id };
+};
+
 const applyTeamFieldUpdates = (team, payload) => {
   const {
     name,
     hackathonLink,
+    eventLink,
     projectName,
     githubLink,
     excalidrawLink,
@@ -92,6 +130,7 @@ const applyTeamFieldUpdates = (team, payload) => {
 
   if (name) team.name = name;
   if (hackathonLink) team.hackathonLink = hackathonLink;
+  if (eventLink) team.eventLink = eventLink;
   if (projectName) team.projectName = projectName;
   if (typeof maxSize === "number") team.maxSize = maxSize;
   if (githubLink) team.links.github = githubLink;
@@ -102,8 +141,11 @@ const applyTeamFieldUpdates = (team, payload) => {
 const createTeam = asyncHandler(async (req, res) => {
   const {
     name,
+    targetType = TEAM_TRACK_TYPES.HACKATHON,
     hackathonId,
+    eventId,
     hackathonLink,
+    eventLink,
     projectName,
     githubLink,
     excalidrawLink,
@@ -112,14 +154,29 @@ const createTeam = asyncHandler(async (req, res) => {
   } = req.body;
 
   let hackathon = null;
-  if (hackathonId) {
-    if (!mongoose.Types.ObjectId.isValid(hackathonId)) {
-      return res.status(400).json({ message: "Invalid hackathon id." });
-    }
+  let event = null;
 
-    hackathon = await Hackathon.findById(hackathonId);
-    if (!hackathon) {
-      return res.status(404).json({ message: "Selected hackathon not found." });
+  if (targetType === TEAM_TRACK_TYPES.HACKATHON) {
+    if (hackathonId) {
+      if (!mongoose.Types.ObjectId.isValid(hackathonId)) {
+        return res.status(400).json({ message: "Invalid hackathon id." });
+      }
+
+      hackathon = await Hackathon.findById(hackathonId);
+      if (!hackathon) {
+        return res.status(404).json({ message: "Selected hackathon not found." });
+      }
+    }
+  } else {
+    if (eventId) {
+      if (!mongoose.Types.ObjectId.isValid(eventId)) {
+        return res.status(400).json({ message: "Invalid event id." });
+      }
+
+      event = await Event.findById(eventId);
+      if (!event) {
+        return res.status(404).json({ message: "Selected event not found." });
+      }
     }
   }
 
@@ -127,8 +184,17 @@ const createTeam = asyncHandler(async (req, res) => {
 
   const team = await Team.create({
     name,
+    trackType: targetType,
     hackathon: hackathon ? hackathon._id : null,
-    hackathonLink,
+    event: event ? event._id : null,
+    hackathonLink:
+      targetType === TEAM_TRACK_TYPES.HACKATHON
+        ? (hackathon?.link || hackathonLink || "")
+        : "",
+    eventLink:
+      targetType === TEAM_TRACK_TYPES.EVENT
+        ? (event?.link || eventLink || "")
+        : "",
     projectName,
     links: {
       github: githubLink,
@@ -163,10 +229,19 @@ const listTeams = asyncHandler(async (req, res) => {
   const { search = "", hackathon = "" } = req.query;
   const normalizedSearch = normalizeQueryInput(search);
   const normalizedHackathon = normalizeQueryInput(hackathon);
+  const normalizedTrackType = normalizeQueryInput(req.query.trackType);
+  const normalizedEvent = normalizeQueryInput(req.query.event);
   const { page, limit } = normalizePaging(req.query.page, req.query.limit);
   const skip = (page - 1) * limit;
 
   const filter = {};
+
+  if (
+    normalizedTrackType === TEAM_TRACK_TYPES.HACKATHON ||
+    normalizedTrackType === TEAM_TRACK_TYPES.EVENT
+  ) {
+    filter.trackType = normalizedTrackType;
+  }
 
   if (normalizedSearch) {
     const regex = new RegExp(escapeRegex(normalizedSearch), "i");
@@ -185,6 +260,21 @@ const listTeams = asyncHandler(async (req, res) => {
       ];
     } else {
       filter.hackathonLink = hackathonRegex;
+    }
+  }
+
+  if (normalizedEvent) {
+    const eventRegex = new RegExp(escapeRegex(normalizedEvent), "i");
+
+    if (mongoose.Types.ObjectId.isValid(normalizedEvent)) {
+      filter.$and = [
+        ...(filter.$and || []),
+        {
+          $or: [{ event: normalizedEvent }, { eventLink: eventRegex }],
+        },
+      ];
+    } else {
+      filter.eventLink = eventRegex;
     }
   }
 
@@ -239,7 +329,9 @@ const getTeamById = asyncHandler(async (req, res) => {
 const updateTeam = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const {
+    targetType,
     hackathonId,
+    eventId,
     maxSize,
   } = req.body;
 
@@ -259,14 +351,61 @@ const updateTeam = asyncHandler(async (req, res) => {
     });
   }
 
+  if (
+    targetType !== undefined &&
+    targetType !== TEAM_TRACK_TYPES.HACKATHON &&
+    targetType !== TEAM_TRACK_TYPES.EVENT
+  ) {
+    return res.status(400).json({ message: "Invalid target type." });
+  }
+
   const hackathonUpdate = await resolveHackathonForUpdate(hackathonId);
+  const eventUpdate = await resolveEventForUpdate(eventId);
 
   if (hackathonUpdate.error) {
     return res.status(hackathonUpdate.statusCode).json({ message: hackathonUpdate.error });
   }
 
+  if (eventUpdate.error) {
+    return res.status(eventUpdate.statusCode).json({ message: eventUpdate.error });
+  }
+
+  const nextTrackType = targetType || team.trackType;
+
+  if (targetType) {
+    team.trackType = targetType;
+  }
+
   if (hackathonUpdate.shouldUpdate) {
     team.hackathon = hackathonUpdate.value;
+  }
+
+  if (eventUpdate.shouldUpdate) {
+    team.event = eventUpdate.value;
+  }
+
+  if (nextTrackType === TEAM_TRACK_TYPES.HACKATHON) {
+    if (team.hackathon && !req.body.hackathonLink) {
+      const linkedHackathon = await Hackathon.findById(team.hackathon).select("link");
+      team.hackathonLink = linkedHackathon?.link || team.hackathonLink;
+    }
+    if (!team.hackathonLink) {
+      return res.status(400).json({ message: "Hackathon link is required for hackathon teams." });
+    }
+    team.event = null;
+    team.eventLink = "";
+  }
+
+  if (nextTrackType === TEAM_TRACK_TYPES.EVENT) {
+    if (team.event && !req.body.eventLink) {
+      const linkedEvent = await Event.findById(team.event).select("link");
+      team.eventLink = linkedEvent?.link || team.eventLink;
+    }
+    if (!team.eventLink) {
+      return res.status(400).json({ message: "Event link is required for event teams." });
+    }
+    team.hackathon = null;
+    team.hackathonLink = "";
   }
 
   applyTeamFieldUpdates(team, req.body);

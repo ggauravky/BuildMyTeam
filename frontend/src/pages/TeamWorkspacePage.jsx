@@ -3,6 +3,7 @@ import { Copy, Link2, QrCode, ShieldCheck, UserMinus, UserPlus2 } from "lucide-r
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useParams } from "react-router-dom";
+import { eventApi } from "../api/event.api";
 import { hackathonApi } from "../api/hackathon.api";
 import { joinRequestApi } from "../api/joinRequest.api";
 import { teamApi } from "../api/team.api";
@@ -21,14 +22,17 @@ function getMemberUserId(member) {
 }
 
 const EMPTY_FORM = {
+  targetType: "hackathon",
   name: "",
   projectName: "",
   hackathonLink: "",
+  eventLink: "",
   githubLink: "",
   excalidrawLink: "",
   whatsappLink: "",
   maxSize: 4,
   hackathonId: "",
+  eventId: "",
 };
 
 export function TeamWorkspacePage() {
@@ -50,6 +54,11 @@ export function TeamWorkspacePage() {
   const hackathonsQuery = useQuery({
     queryKey: ["hackathons-team-edit"],
     queryFn: () => hackathonApi.list(),
+  });
+
+  const eventsQuery = useQuery({
+    queryKey: ["events-team-edit"],
+    queryFn: () => eventApi.list(),
   });
 
   const team = teamQuery.data?.team;
@@ -91,14 +100,17 @@ export function TeamWorkspacePage() {
     }
 
     return {
+      targetType: team.trackType || "hackathon",
       name: team.name,
       projectName: team.projectName,
       hackathonLink: team.hackathonLink,
+      eventLink: team.eventLink || "",
       githubLink: team.links.github,
       excalidrawLink: team.links.excalidraw,
       whatsappLink: team.links.whatsapp,
       maxSize: team.maxSize,
       hackathonId: team.hackathon?._id || "",
+      eventId: team.event?._id || "",
     };
   }, [team]);
 
@@ -183,16 +195,31 @@ export function TeamWorkspacePage() {
   const onUpdateSubmit = (event) => {
     event.preventDefault();
 
-    updateTeamMutation.mutate({
+    const payload = {
+      targetType: form.targetType,
       name: form.name,
       projectName: form.projectName,
       hackathonLink: form.hackathonLink,
+      eventLink: form.eventLink,
       githubLink: form.githubLink,
       excalidrawLink: form.excalidrawLink,
       whatsappLink: form.whatsappLink,
       maxSize: Number(form.maxSize),
       hackathonId: form.hackathonId || null,
-    });
+      eventId: form.eventId || null,
+    };
+
+    if (payload.targetType === "hackathon") {
+      payload.eventId = null;
+      payload.eventLink = "";
+    }
+
+    if (payload.targetType === "event") {
+      payload.hackathonId = null;
+      payload.hackathonLink = "";
+    }
+
+    updateTeamMutation.mutate(payload);
   };
 
   const onTransferLeader = () => {
@@ -246,12 +273,19 @@ export function TeamWorkspacePage() {
 
   const pendingRequests = pendingRequestsQuery.data?.requests || [];
   const hackathons = hackathonsQuery.data?.hackathons || [];
+  const events = eventsQuery.data?.events || [];
+  const isEventTeam = team.trackType === "event";
+  const contextLabel = isEventTeam ? "Event" : "Hackathon";
+  const contextLink = isEventTeam ? team.eventLink : team.hackathonLink;
+  const contextName = isEventTeam
+    ? (team.event?.title || "No linked event")
+    : (team.hackathon?.title || "No linked hackathon");
 
   return (
     <div>
       <PageHeader
         title={team.name}
-        description={`Project: ${team.projectName} | Members ${team.members.length}/${team.maxSize}`}
+        description={`${contextLabel}: ${contextName} | Project: ${team.projectName} | Members ${team.members.length}/${team.maxSize}`}
         actions={
           canManage ? (
             <div className="flex flex-wrap gap-2">
@@ -281,6 +315,11 @@ export function TeamWorkspacePage() {
           <article className="rounded-2xl border border-slate-200 bg-white p-5">
             <h2 className="text-lg font-semibold text-slate-900">Team Resources</h2>
             <div className="mt-3 space-y-2 text-sm text-slate-700">
+              {contextLink ? (
+                <a href={contextLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-teal-700 hover:underline">
+                  <Link2 className="h-4 w-4" /> {contextLabel} Link
+                </a>
+              ) : null}
               <a href={team.links.github} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-teal-700 hover:underline">
                 <Link2 className="h-4 w-4" /> GitHub Repository
               </a>
@@ -297,18 +336,37 @@ export function TeamWorkspacePage() {
             <article className="rounded-2xl border border-slate-200 bg-white p-5">
               <h3 className="text-lg font-semibold text-slate-900">Edit Team Details</h3>
               <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={onUpdateSubmit}>
+                <select name="targetType" value={form.targetType} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                  <option value="hackathon">Hackathon Team</option>
+                  <option value="event">Event Team</option>
+                </select>
                 <input name="name" value={form.name} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="Team Name" />
                 <input name="projectName" value={form.projectName} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="Project Name" />
-                <select name="hackathonId" value={form.hackathonId} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
-                  <option value="">No linked hackathon</option>
-                  {hackathons.map((hackathon) => (
-                    <option key={hackathon._id} value={hackathon._id}>
-                      {hackathon.title}
-                    </option>
-                  ))}
-                </select>
+                {form.targetType === "hackathon" ? (
+                  <select name="hackathonId" value={form.hackathonId} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                    <option value="">No linked hackathon</option>
+                    {hackathons.map((hackathon) => (
+                      <option key={hackathon._id} value={hackathon._id}>
+                        {hackathon.title}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select name="eventId" value={form.eventId} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                    <option value="">No linked event</option>
+                    {events.map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <input type="number" min={2} max={20} name="maxSize" value={form.maxSize} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="Max team size" />
-                <input type="url" name="hackathonLink" value={form.hackathonLink} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="Hackathon Link" />
+                {form.targetType === "hackathon" ? (
+                  <input type="url" name="hackathonLink" value={form.hackathonLink} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="Hackathon Link" />
+                ) : (
+                  <input type="url" name="eventLink" value={form.eventLink} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="Event Link" />
+                )}
                 <input type="url" name="githubLink" value={form.githubLink} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="GitHub Link" />
                 <input type="url" name="excalidrawLink" value={form.excalidrawLink} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="Excalidraw Link" />
                 <input type="url" name="whatsappLink" value={form.whatsappLink} onChange={onFormChange} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="WhatsApp Link" />

@@ -14,6 +14,11 @@ const TEAM_MEMBER_ROLES = {
   MEMBER: "member",
 };
 
+const TEAM_TRACK_TYPES = {
+  HACKATHON: "hackathon",
+  EVENT: "event",
+};
+
 const JOIN_REQUEST_STATUSES = {
   PENDING: "pending",
   APPROVED: "approved",
@@ -33,6 +38,7 @@ module.exports = {
   USER_STATUSES,
   GLOBAL_ROLES,
   TEAM_MEMBER_ROLES,
+  TEAM_TRACK_TYPES,
   JOIN_REQUEST_STATUSES,
   NOTIFICATION_TYPES,
 };

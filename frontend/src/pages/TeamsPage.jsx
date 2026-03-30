@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { eventApi } from "../api/event.api";
 import { hackathonApi } from "../api/hackathon.api";
 import { joinRequestApi } from "../api/joinRequest.api";
 import { teamApi } from "../api/team.api";
@@ -17,7 +18,9 @@ export function TeamsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [trackType, setTrackType] = useState(searchParams.get("track") || "");
   const [hackathonFilter, setHackathonFilter] = useState(searchParams.get("hackathon") || "");
+  const [eventFilter, setEventFilter] = useState(searchParams.get("event") || "");
   const [joinCode, setJoinCode] = useState(normalizeJoinCodeInput(searchParams.get("code") || ""));
   const [feedback, setFeedback] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get("search") || "");
@@ -25,10 +28,12 @@ export function TeamsPage() {
   useEffect(() => {
     const nextParams = {};
     if (search) nextParams.search = search;
+    if (trackType) nextParams.track = trackType;
     if (hackathonFilter) nextParams.hackathon = hackathonFilter;
+    if (eventFilter) nextParams.event = eventFilter;
     if (joinCode) nextParams.code = joinCode;
     setSearchParams(nextParams, { replace: true });
-  }, [search, hackathonFilter, joinCode, setSearchParams]);
+  }, [search, trackType, hackathonFilter, eventFilter, joinCode, setSearchParams]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -41,13 +46,24 @@ export function TeamsPage() {
   }, [search]);
 
   const teamsQuery = useQuery({
-    queryKey: ["teams", debouncedSearch, hackathonFilter],
-    queryFn: () => teamApi.list({ search: debouncedSearch, hackathon: hackathonFilter }),
+    queryKey: ["teams", debouncedSearch, trackType, hackathonFilter, eventFilter],
+    queryFn: () =>
+      teamApi.list({
+        search: debouncedSearch,
+        trackType,
+        hackathon: trackType === "event" ? "" : hackathonFilter,
+        event: trackType === "event" ? eventFilter : "",
+      }),
   });
 
   const hackathonsQuery = useQuery({
     queryKey: ["hackathons-filter-options"],
     queryFn: () => hackathonApi.list(),
+  });
+
+  const eventsQuery = useQuery({
+    queryKey: ["events-filter-options"],
+    queryFn: () => eventApi.list(),
   });
 
   const myJoinRequestsQuery = useQuery({
@@ -81,6 +97,7 @@ export function TeamsPage() {
 
   const teams = teamsQuery.data?.teams || [];
   const hackathons = hackathonsQuery.data?.hackathons || [];
+  const events = eventsQuery.data?.events || [];
   const pendingMyRequests = (myJoinRequestsQuery.data?.requests || []).filter(
     (request) => request.status === "pending"
   );
@@ -98,7 +115,9 @@ export function TeamsPage() {
   };
 
   const selectedHackathon = hackathons.find((item) => item._id === hackathonFilter);
+  const selectedEvent = events.find((item) => item._id === eventFilter);
   const selectedHackathonTitle = selectedHackathon?.title || "";
+  const selectedEventTitle = selectedEvent?.title || "";
 
   return (
     <div>
@@ -121,24 +140,64 @@ export function TeamsPage() {
             </label>
 
             <label className="text-sm font-semibold text-slate-700">
-              Filter by hackathon
+              Team Type
               <select
-                value={hackathonFilter}
-                onChange={(event) => setHackathonFilter(event.target.value)}
+                value={trackType}
+                onChange={(event) => {
+                  const nextType = event.target.value;
+                  setTrackType(nextType);
+                  if (nextType === "event") {
+                    setHackathonFilter("");
+                  } else if (nextType === "hackathon") {
+                    setEventFilter("");
+                  }
+                }}
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none ring-teal-500 transition focus:ring"
               >
-                <option value="">All hackathons</option>
-                {hackathons.map((hackathon) => (
-                  <option key={hackathon._id} value={hackathon._id}>
-                    {hackathon.title}
-                  </option>
-                ))}
+                <option value="">All team types</option>
+                <option value="hackathon">Hackathon teams</option>
+                <option value="event">Event teams</option>
               </select>
+            </label>
+
+            <label className="text-sm font-semibold text-slate-700">
+              {trackType === "event" ? "Filter by event" : "Filter by hackathon"}
+              {trackType === "event" ? (
+                <select
+                  value={eventFilter}
+                  onChange={(event) => setEventFilter(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none ring-teal-500 transition focus:ring"
+                >
+                  <option value="">All events</option>
+                  {events.map((item) => (
+                    <option key={item._id} value={item._id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  value={hackathonFilter}
+                  onChange={(event) => setHackathonFilter(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none ring-teal-500 transition focus:ring"
+                >
+                  <option value="">All hackathons</option>
+                  {hackathons.map((hackathon) => (
+                    <option key={hackathon._id} value={hackathon._id}>
+                      {hackathon.title}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
           </div>
 
           {selectedHackathonTitle ? (
             <p className="mt-3 text-xs text-slate-500">Showing teams for {selectedHackathonTitle}</p>
+          ) : null}
+
+          {selectedEventTitle ? (
+            <p className="mt-1 text-xs text-slate-500">Showing teams for {selectedEventTitle}</p>
           ) : null}
         </div>
 
