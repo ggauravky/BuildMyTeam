@@ -239,16 +239,22 @@ Render deploy steps:
 
 ## Frontend on Vercel
 
-Deploy from the `frontend/` directory.
+Two Vercel deployment modes are supported:
 
-`frontend/vercel.json` includes:
-- Vite build/output configuration
-- SPA rewrite rule to `index.html`
+- Repository-root deployment (default-safe for this monorepo):
+  - Uses root `vercel.json`
+  - Runs `npm ci --prefix frontend` and `npm run build --prefix frontend`
+  - Prevents `npm ci` lockfile errors at repository root
+- Frontend-root deployment:
+  - Set project Root Directory to `frontend`
+  - Uses `frontend/vercel.json`
 
 Vercel deploy steps:
 
 1. Import the same repository in Vercel.
-2. Set project root directory to frontend.
+2. Choose one deployment mode:
+- Keep Root Directory as repository root (recommended), or
+- Set Root Directory to `frontend`.
 3. Set environment variable:
 - `VITE_API_URL=https://your-backend.onrender.com/api`
 4. Build and deploy.
