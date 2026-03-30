@@ -9,13 +9,16 @@ import { PageHeader } from "../components/common/PageHeader";
 import { TeamCard } from "../components/teams/TeamCard";
 import { QRCodeScanner } from "../components/teams/QRCodeScanner";
 
+const JOIN_CODE_PATTERN = /^(\d{4,5}|[A-Z0-9]{10})$/;
+const normalizeJoinCodeInput = (value = "") => value.toUpperCase().replaceAll(/\s+/g, "").trim();
+
 export function TeamsPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [hackathonFilter, setHackathonFilter] = useState(searchParams.get("hackathon") || "");
-  const [joinCode, setJoinCode] = useState(searchParams.get("code") || "");
+  const [joinCode, setJoinCode] = useState(normalizeJoinCodeInput(searchParams.get("code") || ""));
   const [feedback, setFeedback] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get("search") || "");
 
@@ -66,8 +69,8 @@ export function TeamsPage() {
     event.preventDefault();
     setFeedback("");
 
-    if (!/^\d{4,5}$/.test(joinCode)) {
-      setFeedback("Please enter a valid 4-5 digit join code.");
+    if (!JOIN_CODE_PATTERN.test(joinCode)) {
+      setFeedback("Please enter a valid join code.");
       return;
     }
 
@@ -125,8 +128,8 @@ export function TeamsPage() {
               Join Team by Code
               <input
                 value={joinCode}
-                onChange={(event) => setJoinCode(event.target.value)}
-                maxLength={5}
+                onChange={(event) => setJoinCode(normalizeJoinCodeInput(event.target.value))}
+                maxLength={10}
                 placeholder="Enter code"
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none ring-teal-500 transition focus:ring"
               />
@@ -139,7 +142,7 @@ export function TeamsPage() {
             </button>
           </form>
 
-          <QRCodeScanner onCodeDetected={setJoinCode} />
+          <QRCodeScanner onCodeDetected={(value) => setJoinCode(normalizeJoinCodeInput(value))} />
 
           {feedback ? <p className="text-sm text-slate-700">{feedback}</p> : null}
         </div>

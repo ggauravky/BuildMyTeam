@@ -1,6 +1,7 @@
 const { z } = require("zod");
 
 const linkField = z.url();
+const joinCodePattern = /^(\d{4,5}|[A-Z0-9]{10})$/;
 
 const createTeamSchema = z.object({
   name: z.string().min(3).max(120),
@@ -29,7 +30,13 @@ const updateTeamSchema = z
   });
 
 const joinByCodeSchema = z.object({
-  code: z.string().regex(/^\d{4,5}$/),
+  code: z
+    .string()
+    .trim()
+    .transform((value) => value.toUpperCase())
+    .refine((value) => joinCodePattern.test(value), {
+      message: "Join code must be 4-5 digits or 10 alphanumeric characters.",
+    }),
 });
 
 const transferLeaderSchema = z.object({

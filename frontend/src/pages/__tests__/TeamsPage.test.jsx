@@ -31,7 +31,7 @@ vi.mock("../../components/teams/TeamCard", () => ({
 
 vi.mock("../../components/teams/QRCodeScanner", () => ({
   QRCodeScanner: ({ onCodeDetected }) => (
-    <button type="button" onClick={() => onCodeDetected("1234")}>
+    <button type="button" onClick={() => onCodeDetected("AB12CD34EF")}>
       Mock Scan
     </button>
   ),
@@ -78,7 +78,7 @@ describe("TeamsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
 
-    expect(await screen.findByText(/valid 4-5 digit join code/i)).toBeInTheDocument();
+    expect(await screen.findByText(/valid join code/i)).toBeInTheDocument();
     expect(joinRequestApi.createByCode).not.toHaveBeenCalled();
   });
 
@@ -110,6 +110,6 @@ describe("TeamsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Mock Scan" }));
 
-    expect(screen.getByPlaceholderText("Enter code")).toHaveValue("1234");
+    expect(screen.getByPlaceholderText("Enter code")).toHaveValue("AB12CD34EF");
   });
 });

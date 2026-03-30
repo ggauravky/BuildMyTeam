@@ -20,7 +20,7 @@ const canReviewTeamRequests = (team, user) => {
 };
 
 const createJoinRequestByCode = asyncHandler(async (req, res) => {
-  const { code } = req.body;
+  const code = req.body.code.trim().toUpperCase();
   const team = await Team.findOne({ joinCode: code });
 
   if (!team) {
@@ -119,23 +119,39 @@ const reviewJoinRequest = asyncHandler(async (req, res) => {
   }
 
   if (decision === "approve") {
-    const isAlreadyMember = team.members.some(
-      (entry) => entry.user.toString() === joinRequest.user._id.toString()
+    const membershipUpdate = await Team.updateOne(
+      {
+        _id: team._id,
+        "members.user": { $ne: joinRequest.user._id },
+        $expr: { $lt: [{ $size: "$members" }, "$maxSize"] },
+      },
+      {
+        $push: {
+          members: {
+            user: joinRequest.user._id,
+            role: TEAM_MEMBER_ROLES.MEMBER,
+          },
+        },
+      }
     );
 
-    if (isAlreadyMember) {
-      return res.status(400).json({ message: "User is already a member of this team." });
-    }
+    if (membershipUpdate.modifiedCount === 0) {
+      const latestTeam = await Team.findById(team._id).select("members maxSize");
 
-    if (team.members.length >= team.maxSize) {
+      if (!latestTeam) {
+        return res.status(404).json({ message: "Associated team no longer exists." });
+      }
+
+      const isAlreadyMember = latestTeam.members.some(
+        (entry) => entry.user.toString() === joinRequest.user._id.toString()
+      );
+
+      if (isAlreadyMember) {
+        return res.status(400).json({ message: "User is already a member of this team." });
+      }
+
       return res.status(400).json({ message: "Team is already full." });
     }
-
-    team.members.push({
-      user: joinRequest.user._id,
-      role: TEAM_MEMBER_ROLES.MEMBER,
-    });
-    await team.save();
 
     await User.findByIdAndUpdate(joinRequest.user._id, {
       $addToSet: { teams: team._id },

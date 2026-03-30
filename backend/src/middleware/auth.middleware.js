@@ -1,21 +1,22 @@
 const jwt = require("jsonwebtoken");
 const { jwtSecret } = require("../config/env");
+const User = require("../models/User");
 
 const getTokenFromRequest = (req) => {
   const authHeader = req.headers.authorization;
 
-  if (authHeader && authHeader.startsWith("Bearer ")) {
+  if (authHeader?.startsWith("Bearer ")) {
     return authHeader.split(" ")[1];
   }
 
-  if (req.cookies && req.cookies.token) {
+  if (req.cookies?.token) {
     return req.cookies.token;
   }
 
   return null;
 };
 
-const requireAuth = (req, res, next) => {
+const requireAuth = async (req, res, next) => {
   const token = getTokenFromRequest(req);
 
   if (!token) {
@@ -24,19 +25,31 @@ const requireAuth = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, jwtSecret);
-    req.user = {
-      id: decoded.sub || decoded.id,
-      role: decoded.role,
-      status: decoded.status,
-    };
 
-    if (!req.user.id) {
+    const userId = decoded.sub || decoded.id;
+    if (!userId) {
       return res.status(401).json({ message: "Invalid authentication token." });
     }
 
+    const user = await User.findById(userId).select("role status");
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid or expired authentication token." });
+    }
+
+    req.user = {
+      id: user._id.toString(),
+      role: user.role,
+      status: user.status,
+    };
+
     return next();
-  } catch {
-    return res.status(401).json({ message: "Invalid or expired authentication token." });
+  } catch (error) {
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Invalid or expired authentication token." });
+    }
+
+    return next(error);
   }
 };
 

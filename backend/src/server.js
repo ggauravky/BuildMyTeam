@@ -12,7 +12,14 @@ const { syncAdminFromEnv } = require("./services/adminBootstrap.service");
 
 const startServer = async () => {
   try {
-    await connectDatabase(mongoUri);
+    const dbConnection = await connectDatabase(mongoUri);
+
+    if (dbConnection.mode === "memory-fallback") {
+      console.warn(
+        "Primary MongoDB connection failed. Using temporary in-memory database for local development."
+      );
+      console.warn("Reason:", dbConnection.reason);
+    }
 
     if (adminSyncOnStartup) {
       const adminSyncResult = await syncAdminFromEnv({

@@ -1,10 +1,16 @@
+const { randomBytes } = require("node:crypto");
 const Team = require("../models/Team");
 
+const JOIN_CODE_LENGTH = 10;
+const JOIN_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
 const createCandidate = () => {
-  const isFourDigit = Math.random() < 0.5;
-  const min = isFourDigit ? 1000 : 10000;
-  const max = isFourDigit ? 9999 : 99999;
-  return String(Math.floor(Math.random() * (max - min + 1)) + min);
+  const bytes = randomBytes(JOIN_CODE_LENGTH);
+
+  return Array.from(
+    bytes,
+    (byte) => JOIN_CODE_ALPHABET[byte % JOIN_CODE_ALPHABET.length]
+  ).join("");
 };
 
 const generateUniqueJoinCode = async () => {

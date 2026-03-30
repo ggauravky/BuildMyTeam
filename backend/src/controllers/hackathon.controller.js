@@ -1,4 +1,5 @@
 const Hackathon = require("../models/Hackathon");
+const Team = require("../models/Team");
 const asyncHandler = require("../utils/asyncHandler");
 
 const normalizePaging = (pageInput, limitInput) => {
@@ -64,6 +65,9 @@ const updateHackathon = asyncHandler(async (req, res) => {
 
 const deleteHackathon = asyncHandler(async (req, res) => {
   const { id } = req.params;
+
+  await Team.updateMany({ hackathon: id }, { $set: { hackathon: null } });
+
   const hackathon = await Hackathon.findByIdAndDelete(id);
 
   if (!hackathon) {

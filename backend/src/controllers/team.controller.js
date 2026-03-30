@@ -16,6 +16,9 @@ const normalizePaging = (pageInput, limitInput) => {
   return { page, limit };
 };
 
+const normalizeQueryInput = (value) => (typeof value === "string" ? value.trim() : "");
+const escapeRegex = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\\$&`);
+
 const resolveCreatorId = (team) => {
   if (team.createdBy) {
     return team.createdBy.toString();
@@ -158,24 +161,26 @@ const createTeam = asyncHandler(async (req, res) => {
 
 const listTeams = asyncHandler(async (req, res) => {
   const { search = "", hackathon = "" } = req.query;
+  const normalizedSearch = normalizeQueryInput(search);
+  const normalizedHackathon = normalizeQueryInput(hackathon);
   const { page, limit } = normalizePaging(req.query.page, req.query.limit);
   const skip = (page - 1) * limit;
 
   const filter = {};
 
-  if (search) {
-    const regex = new RegExp(search, "i");
+  if (normalizedSearch) {
+    const regex = new RegExp(escapeRegex(normalizedSearch), "i");
     filter.$or = [{ name: regex }, { projectName: regex }];
   }
 
-  if (hackathon) {
-    const hackathonRegex = new RegExp(hackathon, "i");
+  if (normalizedHackathon) {
+    const hackathonRegex = new RegExp(escapeRegex(normalizedHackathon), "i");
 
-    if (mongoose.Types.ObjectId.isValid(hackathon)) {
+    if (mongoose.Types.ObjectId.isValid(normalizedHackathon)) {
       filter.$and = [
         ...(filter.$and || []),
         {
-          $or: [{ hackathon }, { hackathonLink: hackathonRegex }],
+          $or: [{ hackathon: normalizedHackathon }, { hackathonLink: hackathonRegex }],
         },
       ];
     } else {

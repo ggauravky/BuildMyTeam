@@ -2,6 +2,8 @@ const dotenv = require("dotenv");
 
 dotenv.config();
 
+const nodeEnv = process.env.NODE_ENV || "development";
+
 const requiredVariables = ["MONGODB_URI", "JWT_SECRET"];
 
 const parseBoolean = (value, defaultValue = false) => {
@@ -12,6 +14,16 @@ const parseBoolean = (value, defaultValue = false) => {
   return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
 };
 
+const parsePositiveInteger = (value, fallback) => {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
 requiredVariables.forEach((key) => {
   if (!process.env[key]) {
     throw new Error(`Missing required environment variable: ${key}`);
@@ -19,9 +31,14 @@ requiredVariables.forEach((key) => {
 });
 
 module.exports = {
-  nodeEnv: process.env.NODE_ENV || "development",
+  nodeEnv,
   port: Number(process.env.PORT) || 5000,
   mongoUri: process.env.MONGODB_URI,
+  mongoServerSelectionTimeoutMs: parsePositiveInteger(
+    process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS,
+    10000
+  ),
+  dbFallbackToMemory: parseBoolean(process.env.DB_FALLBACK_TO_MEMORY, nodeEnv === "development"),
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173,http://localhost:5174",

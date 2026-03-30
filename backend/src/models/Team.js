@@ -78,7 +78,8 @@ const teamSchema = new mongoose.Schema(
       unique: true,
       index: true,
       minlength: 4,
-      maxlength: 5,
+      maxlength: 12,
+      match: /^(\d{4,5}|[A-Z0-9]{10})$/,
     },
     leader: {
       type: mongoose.Schema.Types.ObjectId,

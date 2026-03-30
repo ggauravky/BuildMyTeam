@@ -56,7 +56,7 @@ describe("Auth and approval workflow", () => {
     });
 
     expect(createWhileApproved.statusCode).toBe(201);
-    expect(createWhileApproved.body.team.joinCode).toMatch(/^\d{4,5}$/);
+    expect(createWhileApproved.body.team.joinCode).toMatch(/^[A-Z0-9]{10}$/);
   });
 
   test("non-admin users cannot access admin endpoints", async () => {

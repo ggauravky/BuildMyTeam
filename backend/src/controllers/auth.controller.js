@@ -53,7 +53,7 @@ const login = asyncHandler(async (req, res) => {
   }
 
   if (user.status === USER_STATUSES.REJECTED) {
-    return res.status(403).json({ message: "Your account was rejected by admin." });
+    return res.status(401).json({ message: "Invalid email or password." });
   }
 
   const token = signAccessToken(user);
