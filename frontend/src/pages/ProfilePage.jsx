@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Briefcase,
+  CalendarDays,
+  Eye,
+  EyeOff,
   ExternalLink,
   GitFork,
   Globe,
@@ -36,6 +39,10 @@ const buildFormStateFromProfile = (profile) => ({
     linkedin: profile?.socialLinks?.linkedin || "",
     website: profile?.socialLinks?.website || "",
   },
+  profileVisibility: {
+    showHackathonsParticipated: profile?.profileVisibility?.showHackathonsParticipated ?? true,
+    hiddenHackathonKeys: profile?.profileVisibility?.hiddenHackathonKeys || [],
+  },
 });
 
 const toProfilePayload = (formState) => {
@@ -55,6 +62,10 @@ const toProfilePayload = (formState) => {
       linkedin: formState.socialLinks.linkedin.trim(),
       website: formState.socialLinks.website.trim(),
     },
+    profileVisibility: {
+      showHackathonsParticipated: Boolean(formState.profileVisibility.showHackathonsParticipated),
+      hiddenHackathonKeys: formState.profileVisibility.hiddenHackathonKeys || [],
+    },
   };
 };
 
@@ -72,6 +83,10 @@ export function ProfilePage() {
     bio: "",
     skills: "",
     socialLinks: emptySocialLinks,
+    profileVisibility: {
+      showHackathonsParticipated: true,
+      hiddenHackathonKeys: [],
+    },
   });
 
   const normalizedUsername = useMemo(() => String(username || "").trim().toLowerCase(), [username]);
@@ -127,6 +142,36 @@ export function ProfilePage() {
     }));
   };
 
+  const onToggleHackathonVisibility = (key) => {
+    setFormState((prev) => {
+      const hiddenSet = new Set(prev.profileVisibility.hiddenHackathonKeys || []);
+
+      if (hiddenSet.has(key)) {
+        hiddenSet.delete(key);
+      } else {
+        hiddenSet.add(key);
+      }
+
+      return {
+        ...prev,
+        profileVisibility: {
+          ...prev.profileVisibility,
+          hiddenHackathonKeys: Array.from(hiddenSet),
+        },
+      };
+    });
+  };
+
+  const onToggleGlobalHackathonVisibility = () => {
+    setFormState((prev) => ({
+      ...prev,
+      profileVisibility: {
+        ...prev.profileVisibility,
+        showHackathonsParticipated: !prev.profileVisibility.showHackathonsParticipated,
+      },
+    }));
+  };
+
   const onStartEdit = () => {
     if (!profile) {
       return;
@@ -156,13 +201,16 @@ export function ProfilePage() {
       ? `${globalThis.window.location.origin}/profile/${profile.username}`
       : "";
 
+  const allHackathons = profile?.hackathonsParticipatedAll || profile?.hackathonsParticipated || [];
+  const visibleHackathons = profile?.hackathonsParticipated || [];
+
   return (
     <div>
       <PageHeader
         title={isPublicRoute ? "Public Profile" : "Profile"}
         description={
           isPublicRoute
-            ? "Browse this member's profile, team participation, and hackathon activity."
+            ? "Browse this member's profile, team participation, and shared hackathon activity."
             : "Manage your profile details and share your public profile page."
         }
       />
@@ -231,6 +279,23 @@ export function ProfilePage() {
             {!isEditing && profile.bio ? (
               <p className="mt-4 text-sm leading-6 text-slate-700">{profile.bio}</p>
             ) : null}
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs text-slate-500">Teams</p>
+                <p className="text-sm font-semibold text-slate-900">{profile.teams.length}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs text-slate-500">Hackathons Shared</p>
+                <p className="text-sm font-semibold text-slate-900">{visibleHackathons.length}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs text-slate-500">Member Since</p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString() : "-"}
+                </p>
+              </div>
+            </div>
 
             {publicProfileUrl ? (
               <p className="mt-3 flex flex-wrap items-center gap-1 text-xs text-slate-500">
@@ -365,6 +430,59 @@ export function ProfilePage() {
                   />
                 </label>
 
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-800">Hackathon Visibility</p>
+                    <button
+                      type="button"
+                      onClick={onToggleGlobalHackathonVisibility}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      {formState.profileVisibility.showHackathonsParticipated ? (
+                        <>
+                          <Eye className="h-3.5 w-3.5" /> Publicly Visible
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="h-3.5 w-3.5" /> Hidden Publicly
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <p className="mt-2 text-xs text-slate-600">
+                    Toggle the full section or hide specific entries from your public profile.
+                  </p>
+
+                  <div className="mt-3 max-h-40 space-y-2 overflow-auto pr-1">
+                    {allHackathons.length === 0 ? (
+                      <p className="text-xs text-slate-500">No hackathon entries available yet.</p>
+                    ) : (
+                      allHackathons.map((hackathon) => {
+                        const isHidden = formState.profileVisibility.hiddenHackathonKeys.includes(
+                          hackathon.key
+                        );
+
+                        return (
+                          <label
+                            key={hackathon.key}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5"
+                          >
+                            <span className="truncate text-xs font-medium text-slate-700">
+                              {hackathon.title}
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={!isHidden}
+                              onChange={() => onToggleHackathonVisibility(hackathon.key)}
+                            />
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="text-sm font-semibold text-slate-700">
                     GitHub URL
@@ -453,16 +571,22 @@ export function ProfilePage() {
                 <Trophy className="h-5 w-5" /> Hackathons Participated
               </h3>
 
-              {profile.hackathonsParticipated.length === 0 ? (
+              {visibleHackathons.length === 0 ? (
                 <p className="mt-2 text-sm text-slate-600">No hackathon participation found yet.</p>
               ) : (
                 <ul className="mt-3 space-y-2">
-                  {profile.hackathonsParticipated.map((hackathon, index) => (
+                  {visibleHackathons.map((hackathon, index) => (
                     <li
                       key={hackathon.id || `${hackathon.link}-${index}`}
                       className="rounded-xl border border-slate-200 px-3 py-2"
                     >
                       <p className="text-sm font-semibold text-slate-900">{hackathon.title}</p>
+                      {hackathon.date ? (
+                        <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          {new Date(hackathon.date).toLocaleDateString()}
+                        </p>
+                      ) : null}
                       <a
                         href={hackathon.link}
                         target="_blank"

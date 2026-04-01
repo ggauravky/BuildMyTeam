@@ -22,6 +22,65 @@ const teamMemberSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const teamHealthChecklistItemSchema = new mongoose.Schema(
+  {
+    label: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 120,
+    },
+    completed: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { _id: false }
+);
+
+const defaultHealthChecklist = () => [
+  { label: "Problem statement defined", completed: false },
+  { label: "MVP scope finalized", completed: false },
+  { label: "Pitch draft prepared", completed: false },
+];
+
+const teamHealthSchema = new mongoose.Schema(
+  {
+    progressPercent: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0,
+    },
+    checklist: {
+      type: [teamHealthChecklistItemSchema],
+      default: defaultHealthChecklist,
+    },
+    blockers: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
+    notes: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: "",
+    },
+    lastCheckInAt: {
+      type: Date,
+      default: null,
+    },
+    lastActivityAt: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+  },
+  { _id: false }
+);
+
 const teamSchema = new mongoose.Schema(
   {
     name: {
@@ -114,6 +173,10 @@ const teamSchema = new mongoose.Schema(
     members: {
       type: [teamMemberSchema],
       default: [],
+    },
+    health: {
+      type: teamHealthSchema,
+      default: () => ({}),
     },
   },
   {

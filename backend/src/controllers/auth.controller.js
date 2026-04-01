@@ -5,6 +5,14 @@ const { signAccessToken } = require("../utils/token");
 
 const sanitizeUser = (user) => user.toSafeObject();
 
+const isSuspensionExpired = (suspension) => {
+  if (!suspension?.isSuspended || !suspension?.until) {
+    return false;
+  }
+
+  return new Date(suspension.until).getTime() <= Date.now();
+};
+
 const signup = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -54,6 +62,26 @@ const login = asyncHandler(async (req, res) => {
 
   if (user.status === USER_STATUSES.REJECTED) {
     return res.status(401).json({ message: "Invalid email or password." });
+  }
+
+  if (user.moderation?.deactivation?.isDeactivated) {
+    return res.status(403).json({ message: "Your account has been deactivated by an administrator." });
+  }
+
+  if (user.moderation?.suspension?.isSuspended) {
+    if (isSuspensionExpired(user.moderation.suspension)) {
+      user.moderation.suspension.isSuspended = false;
+      user.moderation.suspension.liftedAt = new Date();
+      await user.save();
+    } else if (user.moderation.suspension.until) {
+      return res.status(403).json({
+        message: `Your account is suspended until ${new Date(user.moderation.suspension.until).toISOString()}.`,
+      });
+    } else {
+      return res.status(403).json({
+        message: "Your account is suspended. Please contact an administrator.",
+      });
+    }
   }
 
   const token = signAccessToken(user);

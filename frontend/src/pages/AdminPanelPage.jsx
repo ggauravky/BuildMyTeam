@@ -35,6 +35,40 @@ const toDateInputValue = (value) => {
   return parsed.toISOString().slice(0, 10);
 };
 
+const formatDateTime = (value) => {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+
+  return parsed.toLocaleString();
+};
+
+const toLabel = (value) =>
+  String(value || "")
+    .replaceAll("_", " ")
+    .trim();
+
+const getRiskClassName = (riskLevel) => {
+  if (riskLevel === "at_risk") {
+    return "bg-rose-100 text-rose-700";
+  }
+
+  if (riskLevel === "watch") {
+    return "bg-amber-100 text-amber-700";
+  }
+
+  return "bg-emerald-100 text-emerald-700";
+};
+
+const getErrorMessage = (error, fallback) =>
+  error.response?.data?.issues?.[0]?.message || error.response?.data?.message || fallback;
+
 export function AdminPanelPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("pending");
@@ -47,6 +81,32 @@ export function AdminPanelPage() {
   const [editingEventId, setEditingEventId] = useState("");
   const [eventEditForm, setEventEditForm] = useState(initialEvent);
   const [message, setMessage] = useState("");
+
+  const refreshAdminData = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-pending-users"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-command-center"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-moderation-audits"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
+    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+  };
+
+  const askRequiredReason = (title) => {
+    const input = globalThis.prompt(title, "");
+
+    if (input === null) {
+      return null;
+    }
+
+    const trimmed = input.trim();
+
+    if (trimmed.length < 5) {
+      setMessage("Please enter at least 5 characters.");
+      return null;
+    }
+
+    return trimmed;
+  };
 
   const pendingUsersQuery = useQuery({
     queryKey: ["admin-pending-users"],
@@ -81,16 +141,91 @@ export function AdminPanelPage() {
     queryFn: () => adminApi.listEvents(),
   });
 
+  const commandCenterQuery = useQuery({
+    queryKey: ["admin-command-center"],
+    queryFn: () => adminApi.getCommandCenter(),
+    refetchInterval: 30000,
+  });
+
+  const moderationAuditsQuery = useQuery({
+    queryKey: ["admin-moderation-audits"],
+    queryFn: () => adminApi.listModerationAudits({ page: 1, limit: 20 }),
+  });
+
   const updateUserMutation = useMutation({
     mutationFn: ({ id, status }) => adminApi.updateUserStatus(id, { status }),
     onSuccess: () => {
       setMessage("User status updated.");
-      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-pending-users"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      refreshAdminData();
     },
     onError: (error) => {
-      setMessage(error.response?.data?.message || "Unable to update user status.");
+      setMessage(getErrorMessage(error, "Unable to update user status."));
+    },
+  });
+
+  const issueWarningMutation = useMutation({
+    mutationFn: ({ id, warningMessage }) => adminApi.issueWarning(id, { message: warningMessage }),
+    onSuccess: () => {
+      setMessage("Warning issued successfully.");
+      refreshAdminData();
+    },
+    onError: (error) => {
+      setMessage(getErrorMessage(error, "Unable to issue warning."));
+    },
+  });
+
+  const suspendUserMutation = useMutation({
+    mutationFn: ({ id, payload }) => adminApi.suspendUser(id, payload),
+    onSuccess: () => {
+      setMessage("User suspended.");
+      refreshAdminData();
+    },
+    onError: (error) => {
+      setMessage(getErrorMessage(error, "Unable to suspend user."));
+    },
+  });
+
+  const unsuspendUserMutation = useMutation({
+    mutationFn: ({ id, payload }) => adminApi.unsuspendUser(id, payload),
+    onSuccess: () => {
+      setMessage("User suspension lifted.");
+      refreshAdminData();
+    },
+    onError: (error) => {
+      setMessage(getErrorMessage(error, "Unable to lift suspension."));
+    },
+  });
+
+  const deactivateUserMutation = useMutation({
+    mutationFn: ({ id, reason }) => adminApi.deactivateUser(id, { reason }),
+    onSuccess: () => {
+      setMessage("User deactivated.");
+      refreshAdminData();
+    },
+    onError: (error) => {
+      setMessage(getErrorMessage(error, "Unable to deactivate user."));
+    },
+  });
+
+  const reactivateUserMutation = useMutation({
+    mutationFn: ({ id, payload }) => adminApi.reactivateUser(id, payload),
+    onSuccess: () => {
+      setMessage("User reactivated.");
+      refreshAdminData();
+    },
+    onError: (error) => {
+      setMessage(getErrorMessage(error, "Unable to reactivate user."));
+    },
+  });
+
+  const removeUserMutation = useMutation({
+    mutationFn: ({ id, reason }) => adminApi.removeUser(id, reason),
+    onSuccess: () => {
+      setMessage("User removed successfully.");
+      refreshAdminData();
+    },
+    onError: (error) => {
+      setMessage(getErrorMessage(error, "Unable to remove user."));
     },
   });
 
@@ -187,11 +322,10 @@ export function AdminPanelPage() {
     mutationFn: ({ teamId, userId }) => adminApi.removeTeamMember(teamId, userId),
     onSuccess: () => {
       setMessage("Member removed from team.");
-      queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      refreshAdminData();
     },
     onError: (error) => {
-      setMessage(error.response?.data?.message || "Unable to remove member.");
+      setMessage(getErrorMessage(error, "Unable to remove member."));
     },
   });
 
@@ -303,17 +437,246 @@ export function AdminPanelPage() {
     deleteEventMutation.mutate(item._id);
   };
 
+  const onIssueWarning = (userItem) => {
+    const warningMessage = askRequiredReason(`Issue warning to ${userItem.name}:`);
+
+    if (!warningMessage) {
+      return;
+    }
+
+    issueWarningMutation.mutate({
+      id: userItem._id,
+      warningMessage,
+    });
+  };
+
+  const onSuspendUser = (userItem) => {
+    const reason = askRequiredReason(`Suspend ${userItem.name}. Enter reason:`);
+
+    if (!reason) {
+      return;
+    }
+
+    const untilInput = globalThis.prompt(
+      "Optional end date (ISO or YYYY-MM-DD). Leave empty for indefinite suspension:",
+      ""
+    );
+
+    if (untilInput === null) {
+      return;
+    }
+
+    const trimmedUntil = untilInput.trim();
+    const payload = { reason };
+
+    if (trimmedUntil) {
+      const parsed = new Date(trimmedUntil);
+
+      if (Number.isNaN(parsed.getTime())) {
+        setMessage("Invalid suspension end date.");
+        return;
+      }
+
+      payload.until = parsed.toISOString();
+    }
+
+    suspendUserMutation.mutate({ id: userItem._id, payload });
+  };
+
+  const onUnsuspendUser = (userItem) => {
+    const input = globalThis.prompt(
+      `Optional reason for lifting suspension for ${userItem.name}:`,
+      "Suspension lifted by admin."
+    );
+
+    if (input === null) {
+      return;
+    }
+
+    const reason = input.trim();
+    const payload = reason ? { reason } : {};
+
+    unsuspendUserMutation.mutate({ id: userItem._id, payload });
+  };
+
+  const onDeactivateUser = (userItem) => {
+    const reason = askRequiredReason(`Deactivate ${userItem.name}. Enter reason:`);
+
+    if (!reason) {
+      return;
+    }
+
+    deactivateUserMutation.mutate({ id: userItem._id, reason });
+  };
+
+  const onReactivateUser = (userItem) => {
+    const input = globalThis.prompt(
+      `Optional reason for reactivating ${userItem.name}:`,
+      "User account reactivated by admin."
+    );
+
+    if (input === null) {
+      return;
+    }
+
+    const reason = input.trim();
+    const payload = reason ? { reason } : {};
+
+    reactivateUserMutation.mutate({ id: userItem._id, payload });
+  };
+
+  const onRemoveUser = (userItem) => {
+    const confirmed = globalThis.confirm(
+      `Remove user "${userItem.name}" permanently? This cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const reasonInput = globalThis.prompt(
+      `Provide reason for removing ${userItem.name}:`,
+      "Removed by admin"
+    );
+
+    if (reasonInput === null) {
+      return;
+    }
+
+    const reason = reasonInput.trim() || "Removed by admin";
+
+    removeUserMutation.mutate({
+      id: userItem._id,
+      reason,
+    });
+  };
+
   const users = usersQuery.data?.users || [];
   const pendingUsers = pendingUsersQuery.data?.users || [];
   const teams = teamsQuery.data?.teams || [];
   const hackathons = hackathonsQuery.data?.hackathons || [];
   const events = eventsQuery.data?.events || [];
+  const commandCenter = commandCenterQuery.data;
+  const moderationAuditLogs = moderationAuditsQuery.data?.logs || [];
+  const summary = commandCenter?.summary || {
+    users: {
+      total: 0,
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      suspended: 0,
+      deactivated: 0,
+    },
+    teams: {
+      total: 0,
+      onTrack: 0,
+      watch: 0,
+      atRisk: 0,
+    },
+    pendingJoinRequests: 0,
+  };
+
+  const moderationBusy =
+    issueWarningMutation.isPending ||
+    suspendUserMutation.isPending ||
+    unsuspendUserMutation.isPending ||
+    deactivateUserMutation.isPending ||
+    reactivateUserMutation.isPending ||
+    removeUserMutation.isPending;
 
   return (
     <div>
-      <PageHeader title="Admin Panel" description="Approve users, manage hackathons/events, and control team members." />
+      <PageHeader
+        title="Admin Panel"
+        description="Command center for approvals, moderation, team health, and platform operations."
+      />
 
       {message ? <p className="mb-4 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</p> : null}
+
+      <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-slate-900">Command Center Overview</h2>
+          {commandCenterQuery.isLoading ? (
+            <span className="text-xs text-slate-500">Refreshing...</span>
+          ) : (
+            <span className="text-xs text-slate-500">Live summary</span>
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="text-xs text-slate-500">Total Users</p>
+            <p className="text-lg font-semibold text-slate-900">{summary.users.total}</p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <p className="text-xs text-amber-700">Pending Approvals</p>
+            <p className="text-lg font-semibold text-amber-800">{summary.users.pending}</p>
+          </div>
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
+            <p className="text-xs text-rose-700">Suspended + Deactivated</p>
+            <p className="text-lg font-semibold text-rose-800">
+              {summary.users.suspended + summary.users.deactivated}
+            </p>
+          </div>
+          <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5">
+            <p className="text-xs text-teal-700">Pending Join Requests</p>
+            <p className="text-lg font-semibold text-teal-800">{summary.pendingJoinRequests}</p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 xl:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 px-3 py-3">
+            <p className="text-sm font-semibold text-slate-800">Team Health Distribution</p>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="rounded-lg bg-emerald-50 px-2 py-2">
+                <p className="font-semibold text-emerald-700">On Track</p>
+                <p className="text-sm font-bold text-emerald-800">{summary.teams.onTrack}</p>
+              </div>
+              <div className="rounded-lg bg-amber-50 px-2 py-2">
+                <p className="font-semibold text-amber-700">Watch</p>
+                <p className="text-sm font-bold text-amber-800">{summary.teams.watch}</p>
+              </div>
+              <div className="rounded-lg bg-rose-50 px-2 py-2">
+                <p className="font-semibold text-rose-700">At Risk</p>
+                <p className="text-sm font-bold text-rose-800">{summary.teams.atRisk}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 px-3 py-3 xl:col-span-2">
+            <p className="text-sm font-semibold text-slate-800">At-Risk Team Watchlist</p>
+            {(commandCenter?.atRiskTeams || []).length === 0 ? (
+              <p className="mt-2 text-xs text-slate-500">No teams currently flagged as watch/at-risk.</p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {commandCenter.atRiskTeams.map((teamItem) => (
+                  <div
+                    key={teamItem.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-2.5 py-2"
+                  >
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900">{teamItem.name}</p>
+                      <p className="text-[11px] text-slate-500">
+                        {teamItem.projectName || "No project title"} | Members {teamItem.members}/{teamItem.maxSize}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${getRiskClassName(
+                          teamItem.riskLevel
+                        )}`}
+                      >
+                        {toLabel(teamItem.riskLevel)}
+                      </span>
+                      <span className="text-[11px] text-slate-600">{teamItem.progressPercent}% progress</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
       <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -377,6 +740,8 @@ export function AdminPanelPage() {
                 <option value="">All statuses</option>
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
+                <option value="suspended">Suspended</option>
+                <option value="deactivated">Deactivated</option>
               </select>
 
               <select
@@ -392,7 +757,7 @@ export function AdminPanelPage() {
           </div>
 
           <label className="mb-3 block text-sm font-semibold text-slate-700">
-            Search users
+            <span>Search users</span>
             <input
               value={userSearch}
               onChange={(event) => setUserSearch(event.target.value)}
@@ -426,7 +791,24 @@ export function AdminPanelPage() {
                     {item.role}
                   </span>
                   <span>Teams: {item.teamCount ?? item.teams?.length ?? 0}</span>
+                  <span>Warnings: {item.warningCount || 0}</span>
+                  {item.moderation?.isSuspended ? (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">
+                      Suspended
+                    </span>
+                  ) : null}
+                  {item.moderation?.isDeactivated ? (
+                    <span className="rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-700">
+                      Deactivated
+                    </span>
+                  ) : null}
                 </div>
+
+                {item.moderation?.suspensionUntil ? (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Suspension until: {formatDateTime(item.moderation.suspensionUntil)}
+                  </p>
+                ) : null}
 
                 {item.headline ? <p className="mt-2 text-xs text-slate-700">{item.headline}</p> : null}
 
@@ -469,6 +851,68 @@ export function AdminPanelPage() {
                     </button>
                   </div>
                 ) : null}
+
+                {item.role === "admin" ? null : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onIssueWarning(item)}
+                      disabled={moderationBusy}
+                      className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Warn
+                    </button>
+
+                    {item.moderation?.isSuspended ? (
+                      <button
+                        type="button"
+                        onClick={() => onUnsuspendUser(item)}
+                        disabled={moderationBusy}
+                        className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Lift Suspension
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onSuspendUser(item)}
+                        disabled={moderationBusy}
+                        className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Suspend
+                      </button>
+                    )}
+
+                    {item.moderation?.isDeactivated ? (
+                      <button
+                        type="button"
+                        onClick={() => onReactivateUser(item)}
+                        disabled={moderationBusy}
+                        className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Reactivate
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onDeactivateUser(item)}
+                        disabled={moderationBusy}
+                        className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Deactivate
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => onRemoveUser(item)}
+                      disabled={moderationBusy}
+                      className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Remove User
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -721,6 +1165,63 @@ export function AdminPanelPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-slate-900">Moderation Audit Log</h2>
+          <button
+            type="button"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["admin-moderation-audits"] })}
+            className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {moderationAuditsQuery.isLoading ? (
+          <p className="text-sm text-slate-600">Loading moderation audit logs...</p>
+        ) : null}
+
+        {!moderationAuditsQuery.isLoading && moderationAuditLogs.length === 0 ? (
+          <p className="text-sm text-slate-600">No moderation actions recorded yet.</p>
+        ) : null}
+
+        <div className="space-y-2">
+          {moderationAuditLogs.map((log) => (
+            <div key={log._id} className="rounded-xl border border-slate-200 px-3 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-900">{toLabel(log.action)}</p>
+                <span className="text-[11px] text-slate-500">{formatDateTime(log.createdAt)}</span>
+              </div>
+
+              <p className="mt-1 text-xs text-slate-700">
+                Target: {log.targetUser?.name || "Unknown"} ({log.targetUser?.email || "No email"})
+              </p>
+              <p className="text-xs text-slate-600">
+                By: {log.performedBy?.name || "System"} ({log.performedBy?.email || "No email"})
+              </p>
+
+              {log.reason ? <p className="mt-1 text-xs text-slate-600">Reason: {log.reason}</p> : null}
+            </div>
+          ))}
+        </div>
+
+        {(commandCenter?.moderation?.last7Days || []).length > 0 ? (
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="text-xs font-semibold text-slate-700">Last 7 Days Action Counts</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {commandCenter.moderation.last7Days.map((entry) => (
+                <span
+                  key={entry._id}
+                  className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700"
+                >
+                  {toLabel(entry._id)}: {entry.count}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );

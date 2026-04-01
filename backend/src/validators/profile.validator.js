@@ -27,6 +27,12 @@ const updateProfileSchema = z
         website: optionalUrlOrEmpty.optional(),
       })
       .optional(),
+    profileVisibility: z
+      .object({
+        showHackathonsParticipated: z.boolean().optional(),
+        hiddenHackathonKeys: z.array(z.string().trim().min(1).max(120)).max(200).optional(),
+      })
+      .optional(),
   })
   .refine((payload) => Object.keys(payload).length > 0, {
     message: "At least one profile field is required.",

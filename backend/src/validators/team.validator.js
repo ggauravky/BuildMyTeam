@@ -73,9 +73,30 @@ const transferLeaderSchema = z.object({
   newLeaderId: z.string().min(1),
 });
 
+const updateTeamHealthSchema = z
+  .object({
+    progressPercent: z.coerce.number().min(0).max(100).optional(),
+    checklist: z
+      .array(
+        z.object({
+          label: z.string().trim().min(1).max(120),
+          completed: z.boolean(),
+        })
+      )
+      .max(20)
+      .optional(),
+    blockers: z.string().trim().max(500).optional(),
+    notes: z.string().trim().max(1000).optional(),
+    checkInNow: z.boolean().optional(),
+  })
+  .refine((payload) => Object.keys(payload).length > 0, {
+    message: "At least one health field is required.",
+  });
+
 module.exports = {
   createTeamSchema,
   updateTeamSchema,
   joinByCodeSchema,
   transferLeaderSchema,
+  updateTeamHealthSchema,
 };

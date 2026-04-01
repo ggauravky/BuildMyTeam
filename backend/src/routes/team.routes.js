@@ -8,6 +8,8 @@ const {
   removeMember,
   transferLeader,
   getTeamJoinQr,
+  getTeamHealth,
+  updateTeamHealth,
   deleteTeam,
 } = require("../controllers/team.controller");
 const { requireAuth } = require("../middleware/auth.middleware");
@@ -21,6 +23,7 @@ const {
   createTeamSchema,
   updateTeamSchema,
   transferLeaderSchema,
+  updateTeamHealthSchema,
 } = require("../validators/team.validator");
 
 const router = express.Router();
@@ -53,6 +56,15 @@ router.patch(
 );
 router.delete("/:id", requireAuth, requireApprovedUser, requireTeamCreatorOrAdmin(), deleteTeam);
 router.get("/:id/qr", requireAuth, requireApprovedUser, requireTeamMemberOrAdmin(), getTeamJoinQr);
+router.get("/:id/health", requireAuth, requireApprovedUser, requireTeamMemberOrAdmin(), getTeamHealth);
+router.patch(
+  "/:id/health",
+  requireAuth,
+  requireApprovedUser,
+  requireTeamCreatorOrAdmin(),
+  validate(updateTeamHealthSchema),
+  updateTeamHealth
+);
 router.get("/:id", getTeamById);
 
 module.exports = router;

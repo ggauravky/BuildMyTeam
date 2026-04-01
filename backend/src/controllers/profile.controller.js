@@ -22,12 +22,20 @@ const getRoleLabel = (user, teams) => {
   return isLeader ? "Team Leader" : "Member";
 };
 
-const buildHackathonsParticipated = (teams) => {
+const buildHackathonsParticipated = (teams, profileVisibility = {}, { includeHidden = false } = {}) => {
   const hackathonsMap = new Map();
+  const hiddenKeys = new Set((profileVisibility.hiddenHackathonKeys || []).map((item) => String(item)));
 
   teams.forEach((team) => {
+    if (!team.hackathon && !team.hackathonLink) {
+      return;
+    }
+
     if (team.hackathon) {
-      hackathonsMap.set(String(team.hackathon._id), {
+      const key = `hackathon:${team.hackathon._id}`;
+
+      hackathonsMap.set(key, {
+        key,
         id: team.hackathon._id,
         title: team.hackathon.title,
         description: team.hackathon.description,
@@ -37,7 +45,10 @@ const buildHackathonsParticipated = (teams) => {
       return;
     }
 
-    hackathonsMap.set(`link:${team.hackathonLink}`, {
+    const key = `link:${team.hackathonLink}`;
+
+    hackathonsMap.set(key, {
+      key,
       id: null,
       title: team.hackathonLink,
       description: "External hackathon link",
@@ -46,7 +57,17 @@ const buildHackathonsParticipated = (teams) => {
     });
   });
 
-  return Array.from(hackathonsMap.values());
+  const allEntries = Array.from(hackathonsMap.values());
+
+  if (includeHidden) {
+    return allEntries;
+  }
+
+  if (profileVisibility.showHackathonsParticipated === false) {
+    return [];
+  }
+
+  return allEntries.filter((entry) => !hiddenKeys.has(entry.key));
 };
 
 const loadTeamsForUser = (userId, includeMemberEmails = true) => {
@@ -59,6 +80,13 @@ const loadTeamsForUser = (userId, includeMemberEmails = true) => {
 };
 
 const buildOwnProfilePayload = (user, teams) => {
+  const profileVisibility = user.profileVisibility || {
+    showHackathonsParticipated: true,
+    hiddenHackathonKeys: [],
+  };
+
+  const allHackathons = buildHackathonsParticipated(teams, profileVisibility, { includeHidden: true });
+
   return {
     id: user._id,
     name: user.name,
@@ -70,9 +98,15 @@ const buildOwnProfilePayload = (user, teams) => {
     bio: user.bio || "",
     skills: user.skills || [],
     socialLinks: user.socialLinks || { github: "", linkedin: "", website: "" },
+    profileVisibility,
     teams,
-    hackathonsParticipated: buildHackathonsParticipated(teams),
+    hackathonsParticipatedAll: allHackathons,
+    hackathonsParticipated: buildHackathonsParticipated(teams, profileVisibility),
     createdAt: user.createdAt,
+    moderation: {
+      warningCount: user.moderation?.warnings?.length || 0,
+      isSuspended: user.isCurrentlySuspended ? user.isCurrentlySuspended() : false,
+    },
   };
 };
 
@@ -97,14 +131,14 @@ const buildPublicProfilePayload = (user, teams) => {
     skills: user.skills || [],
     socialLinks: user.socialLinks || { github: "", linkedin: "", website: "" },
     teams: teamsForPublicView,
-    hackathonsParticipated: buildHackathonsParticipated(teams),
+    hackathonsParticipated: buildHackathonsParticipated(teams, user.profileVisibility),
     createdAt: user.createdAt,
   };
 };
 
 const getMyProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user.id).select(
-    "name email username role status headline bio skills socialLinks createdAt"
+    "name email username role status headline bio skills socialLinks profileVisibility moderation createdAt"
   );
 
   if (!user) {
@@ -125,7 +159,7 @@ const getMyProfile = asyncHandler(async (req, res) => {
 
 const updateMyProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user.id).select(
-    "name email username headline bio skills socialLinks"
+    "name email username headline bio skills socialLinks profileVisibility"
   );
 
   if (!user) {
@@ -139,6 +173,7 @@ const updateMyProfile = asyncHandler(async (req, res) => {
     bio,
     skills,
     socialLinks,
+    profileVisibility,
   } = req.body;
 
   if (name !== undefined) {
@@ -170,6 +205,26 @@ const updateMyProfile = asyncHandler(async (req, res) => {
     };
   }
 
+  if (profileVisibility !== undefined) {
+    const currentVisibility = user.profileVisibility?.toObject
+      ? user.profileVisibility.toObject()
+      : user.profileVisibility || {};
+
+    user.profileVisibility = {
+      showHackathonsParticipated:
+        profileVisibility.showHackathonsParticipated ??
+        currentVisibility.showHackathonsParticipated ??
+        true,
+      hiddenHackathonKeys: Array.from(
+        new Set(
+          (profileVisibility.hiddenHackathonKeys ?? currentVisibility.hiddenHackathonKeys ?? [])
+            .map((entry) => String(entry || "").trim())
+            .filter(Boolean)
+        )
+      ),
+    };
+  }
+
   await user.save();
 
   const teams = await loadTeamsForUser(user._id);
@@ -188,7 +243,7 @@ const getPublicProfileByUsername = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findOne({ username: normalizedUsername }).select(
-    "name username role status headline bio skills socialLinks createdAt"
+    "name username role status headline bio skills socialLinks profileVisibility createdAt"
   );
 
   if (!user) {

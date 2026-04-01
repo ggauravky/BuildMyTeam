@@ -1,8 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Link2, QrCode, ShieldCheck, UserMinus, UserPlus2 } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Copy,
+  Link2,
+  QrCode,
+  ShieldCheck,
+  UserMinus,
+  UserPlus2,
+} from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { eventApi } from "../api/event.api";
 import { hackathonApi } from "../api/hackathon.api";
 import { joinRequestApi } from "../api/joinRequest.api";
@@ -14,7 +23,7 @@ import { StatusBadge } from "../components/common/StatusBadge";
 import { useAuth } from "../hooks/useAuth";
 
 function getMemberUserId(member) {
-  if (!member || !member.user) {
+  if (!member?.user) {
     return "";
   }
 
@@ -35,6 +44,48 @@ const EMPTY_FORM = {
   eventId: "",
 };
 
+const DEFAULT_HEALTH_CHECKLIST = [
+  { label: "Problem statement defined", completed: false },
+  { label: "MVP scope finalized", completed: false },
+  { label: "Pitch draft prepared", completed: false },
+];
+
+const toRiskLabel = (value) => String(value || "on_track").replaceAll("_", " ");
+
+const getRiskClassName = (riskLevel) => {
+  if (riskLevel === "at_risk") {
+    return "bg-rose-100 text-rose-700";
+  }
+
+  if (riskLevel === "watch") {
+    return "bg-amber-100 text-amber-700";
+  }
+
+  return "bg-emerald-100 text-emerald-700";
+};
+
+const formatDateTime = (value) => {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+
+  return parsed.toLocaleString();
+};
+
+const renderReadOnlyChecklistStatus = (isCompleted) => {
+  if (isCompleted) {
+    return <CheckCircle2 className="h-4 w-4 text-emerald-600" />;
+  }
+
+  return <AlertTriangle className="h-4 w-4 text-amber-600" />;
+};
+
 export function TeamWorkspacePage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -45,6 +96,7 @@ export function TeamWorkspacePage() {
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [newLeaderId, setNewLeaderId] = useState("");
+  const [healthDraft, setHealthDraft] = useState(null);
 
   const teamQuery = useQuery({
     queryKey: ["team", id],
@@ -93,6 +145,7 @@ export function TeamWorkspacePage() {
 
   const canManage = Boolean(isAdmin || (user && creatorId === user.id));
   const canViewQr = Boolean(isAdmin || myMembership);
+  const canViewHealth = Boolean(isAdmin || myMembership);
 
   const teamDerivedForm = useMemo(() => {
     if (!team) {
@@ -124,6 +177,12 @@ export function TeamWorkspacePage() {
     queryKey: ["team-qr", id],
     queryFn: () => teamApi.getQr(id),
     enabled: canViewQr,
+  });
+
+  const teamHealthQuery = useQuery({
+    queryKey: ["team-health", id],
+    queryFn: () => teamApi.getHealth(id),
+    enabled: canViewHealth,
   });
 
   const updateTeamMutation = useMutation({
@@ -187,9 +246,51 @@ export function TeamWorkspacePage() {
     },
   });
 
+  const updateTeamHealthMutation = useMutation({
+    mutationFn: (payload) => teamApi.updateHealth(id, payload),
+    onSuccess: () => {
+      setMessage("Team health updated.");
+      setHealthDraft(null);
+      queryClient.invalidateQueries({ queryKey: ["team-health", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-command-center"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
+    },
+    onError: (error) => {
+      setMessage(error.response?.data?.message || "Unable to update team health.");
+    },
+  });
+
   const onFormChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const onHealthInputChange = (event) => {
+    const { name, value } = event.target;
+    setHealthDraft((prev) => ({ ...(prev || healthForm), [name]: value }));
+  };
+
+  const onToggleChecklistItem = (index) => {
+    setHealthDraft((prev) => {
+      const base = prev || healthForm;
+
+      return {
+        ...base,
+        checklist: base.checklist.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, completed: !item.completed } : item
+        ),
+      };
+    });
+  };
+
+  const onSaveHealth = () => {
+    updateTeamHealthMutation.mutate({
+      progressPercent: Number(healthForm.progressPercent),
+      blockers: healthForm.blockers,
+      notes: healthForm.notes,
+      checklist: healthForm.checklist,
+      checkInNow: true,
+    });
   };
 
   const onUpdateSubmit = (event) => {
@@ -280,6 +381,21 @@ export function TeamWorkspacePage() {
   const contextName = isEventTeam
     ? (team.event?.title || "No linked event")
     : (team.hackathon?.title || "No linked hackathon");
+  const healthSnapshot = teamHealthQuery.data?.health;
+  const baseHealthForm = {
+    progressPercent: healthSnapshot?.progressPercent ?? 0,
+    blockers: healthSnapshot?.blockers || "",
+    notes: healthSnapshot?.notes || "",
+    checklist: healthSnapshot?.checklist?.length ? healthSnapshot.checklist : DEFAULT_HEALTH_CHECKLIST,
+  };
+  const healthForm = healthDraft || baseHealthForm;
+  const checklistItems = healthForm.checklist || [];
+  const completedChecklistCount = checklistItems.filter((item) => item.completed).length;
+  const checklistCompletionPercent = checklistItems.length
+    ? Math.round((completedChecklistCount / checklistItems.length) * 100)
+    : 0;
+  const progressPercent = Number(healthForm.progressPercent || 0);
+  const healthRiskLevel = healthSnapshot?.riskLevel || "on_track";
 
   return (
     <div>
@@ -437,6 +553,154 @@ export function TeamWorkspacePage() {
         </div>
 
         <div className="space-y-4">
+          {canViewHealth ? (
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
+                  <Activity className="h-5 w-5 text-teal-700" /> Team Health Dashboard
+                </h2>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${getRiskClassName(
+                    healthRiskLevel
+                  )}`}
+                >
+                  {toRiskLabel(healthRiskLevel)}
+                </span>
+              </div>
+
+              {teamHealthQuery.isLoading ? (
+                <p className="mt-2 text-sm text-slate-600">Loading health snapshot...</p>
+              ) : null}
+
+              {teamHealthQuery.isLoading ? null : (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                      <p className="text-slate-500">Progress</p>
+                      <p className="text-sm font-semibold text-slate-900">{progressPercent}%</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                      <p className="text-slate-500">Checklist</p>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {completedChecklistCount}/{checklistItems.length} ({checklistCompletionPercent}%)
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                      <p className="text-slate-500">Last Check-in</p>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {formatDateTime(healthSnapshot?.lastCheckInAt)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                      <p className="text-slate-500">Last Activity</p>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {formatDateTime(healthSnapshot?.lastActivityAt)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="mb-1 flex items-center justify-between text-xs text-slate-600">
+                      <span>Progress Meter</span>
+                      <span>{progressPercent}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-full rounded-full bg-teal-500 transition-all"
+                        style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
+                      />
+                    </div>
+
+                    {canManage ? (
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        name="progressPercent"
+                        value={progressPercent}
+                        onChange={onHealthInputChange}
+                        className="mt-2 w-full accent-teal-600"
+                      />
+                    ) : null}
+                  </div>
+
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold text-slate-700">Checklist</p>
+                    <div className="mt-2 space-y-1.5">
+                      {checklistItems.map((item, index) => (
+                        <label
+                          key={`${item.label}-${index}`}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5"
+                        >
+                          <span className="text-xs text-slate-700">{item.label}</span>
+                          {canManage ? (
+                            <input
+                              type="checkbox"
+                              checked={Boolean(item.completed)}
+                              onChange={() => onToggleChecklistItem(index)}
+                            />
+                          ) : (
+                            renderReadOnlyChecklistStatus(item.completed)
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Blockers
+                      {canManage ? (
+                        <textarea
+                          name="blockers"
+                          value={healthForm.blockers}
+                          onChange={onHealthInputChange}
+                          maxLength={500}
+                          rows={2}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          placeholder="List current blockers and dependencies."
+                        />
+                      ) : (
+                        <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-normal text-slate-700">
+                          {healthForm.blockers || "No blockers recorded."}
+                        </p>
+                      )}
+                    </label>
+
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Check-in Notes
+                      {canManage ? (
+                        <textarea
+                          name="notes"
+                          value={healthForm.notes}
+                          onChange={onHealthInputChange}
+                          maxLength={1000}
+                          rows={3}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          placeholder="Share sprint status, next actions, and support needed."
+                        />
+                      ) : (
+                        <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-normal text-slate-700">
+                          {healthForm.notes || "No notes recorded."}
+                        </p>
+                      )}
+                    </label>
+                  </div>
+
+                  {canManage ? (
+                    <button
+                      type="button"
+                      onClick={onSaveHealth}
+                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+                    >
+                      {updateTeamHealthMutation.isPending ? "Saving Health..." : "Save Health Check-in"}
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </article>
+          ) : null}
+
           {canViewQr ? (
             <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <div className="flex items-center justify-between">

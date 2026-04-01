@@ -7,6 +7,103 @@ const USERNAME_MAX_LENGTH = 30;
 const USERNAME_REGEX = /^[a-z0-9_]+$/;
 const RESERVED_USERNAMES = new Set(["me"]);
 
+const warningSchema = new mongoose.Schema(
+  {
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 300,
+    },
+    issuedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    issuedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+  },
+  { _id: false }
+);
+
+const moderationSchema = new mongoose.Schema(
+  {
+    warnings: {
+      type: [warningSchema],
+      default: [],
+    },
+    suspension: {
+      isSuspended: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
+      reason: {
+        type: String,
+        trim: true,
+        maxlength: 500,
+        default: "",
+      },
+      until: {
+        type: Date,
+        default: null,
+      },
+      suspendedAt: {
+        type: Date,
+        default: null,
+      },
+      suspendedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      liftedAt: {
+        type: Date,
+        default: null,
+      },
+      liftedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+    },
+    deactivation: {
+      isDeactivated: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
+      reason: {
+        type: String,
+        trim: true,
+        maxlength: 500,
+        default: "",
+      },
+      deactivatedAt: {
+        type: Date,
+        default: null,
+      },
+      deactivatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      reactivatedAt: {
+        type: Date,
+        default: null,
+      },
+      reactivatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+    },
+  },
+  { _id: false }
+);
+
 const normalizeUsername = (value) => {
   const normalized = String(value || "")
     .toLowerCase()
@@ -164,6 +261,26 @@ const userSchema = new mongoose.Schema(
         default: "",
       },
     },
+    profileVisibility: {
+      showHackathonsParticipated: {
+        type: Boolean,
+        default: true,
+      },
+      hiddenHackathonKeys: {
+        type: [
+          {
+            type: String,
+            trim: true,
+            maxlength: 120,
+          },
+        ],
+        default: [],
+      },
+    },
+    moderation: {
+      type: moderationSchema,
+      default: () => ({}),
+    },
     teams: [{ type: mongoose.Schema.Types.ObjectId, ref: "Team" }],
   },
   {
@@ -192,6 +309,24 @@ userSchema.methods.comparePassword = function comparePassword(plainPassword) {
   return bcrypt.compare(plainPassword, this.password);
 };
 
+userSchema.methods.isCurrentlySuspended = function isCurrentlySuspended() {
+  const suspension = this.moderation?.suspension;
+
+  if (!suspension?.isSuspended) {
+    return false;
+  }
+
+  if (!suspension.until) {
+    return true;
+  }
+
+  return suspension.until.getTime() > Date.now();
+};
+
+userSchema.methods.isDeactivated = function isDeactivated() {
+  return Boolean(this.moderation?.deactivation?.isDeactivated);
+};
+
 userSchema.methods.toSafeObject = function toSafeObject() {
   return {
     id: this._id,
@@ -204,6 +339,18 @@ userSchema.methods.toSafeObject = function toSafeObject() {
     bio: this.bio,
     skills: this.skills,
     socialLinks: this.socialLinks,
+    profileVisibility: this.profileVisibility,
+    moderation: {
+      warningCount: this.moderation?.warnings?.length || 0,
+      suspension: {
+        isSuspended: this.isCurrentlySuspended(),
+        until: this.moderation?.suspension?.until || null,
+        reason: this.moderation?.suspension?.reason || "",
+      },
+      deactivation: {
+        isDeactivated: this.isDeactivated(),
+      },
+    },
     teams: this.teams,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,

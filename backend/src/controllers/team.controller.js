@@ -10,6 +10,7 @@ const { generateUniqueJoinCode } = require("../utils/generateJoinCode");
 const {
   GLOBAL_ROLES,
   NOTIFICATION_TYPES,
+  TEAM_HEALTH_RISK_LEVELS,
   TEAM_MEMBER_ROLES,
   TEAM_TRACK_TYPES,
 } = require("../utils/constants");
@@ -55,6 +56,97 @@ const populateTeamQuery = (query) =>
     .populate("members.user", "name email status")
     .populate("hackathon", "title date link")
     .populate("event", "title date link");
+
+const markTeamActivity = (team) => {
+  if (!team.health) {
+    team.health = {};
+  }
+
+  team.health.lastActivityAt = new Date();
+};
+
+const resolveRiskLevel = ({ progressPercent, blockers, inactiveDays, checklistCompletionPercent, checkInAgeDays }) => {
+  let score = 0;
+
+  if (progressPercent < 30) {
+    score += 2;
+  } else if (progressPercent < 60) {
+    score += 1;
+  }
+
+  if (blockers) {
+    score += 2;
+  }
+
+  if (inactiveDays >= 5) {
+    score += 2;
+  } else if (inactiveDays >= 3) {
+    score += 1;
+  }
+
+  if (checklistCompletionPercent < 40) {
+    score += 1;
+  }
+
+  if (checkInAgeDays !== null && checkInAgeDays >= 7) {
+    score += 1;
+  }
+
+  if (score >= 5) {
+    return TEAM_HEALTH_RISK_LEVELS.AT_RISK;
+  }
+
+  if (score >= 3) {
+    return TEAM_HEALTH_RISK_LEVELS.WATCH;
+  }
+
+  return TEAM_HEALTH_RISK_LEVELS.ON_TRACK;
+};
+
+const buildTeamHealthSnapshot = (team) => {
+  const health = team.health || {};
+  const checklist = health.checklist || [];
+  const completedCount = checklist.filter((item) => item.completed).length;
+  const checklistCompletionPercent = checklist.length
+    ? Math.round((completedCount / checklist.length) * 100)
+    : 0;
+
+  const now = Date.now();
+  const lastActivityAt = health.lastActivityAt || team.updatedAt || team.createdAt || new Date();
+  const lastCheckInAt = health.lastCheckInAt || null;
+
+  const inactiveDays = Math.max(
+    0,
+    Math.floor((now - new Date(lastActivityAt).getTime()) / (1000 * 60 * 60 * 24))
+  );
+
+  const checkInAgeDays = lastCheckInAt
+    ? Math.max(0, Math.floor((now - new Date(lastCheckInAt).getTime()) / (1000 * 60 * 60 * 24)))
+    : null;
+
+  const blockers = String(health.blockers || "").trim();
+  const progressPercent = Number(health.progressPercent || 0);
+
+  return {
+    progressPercent,
+    checklist,
+    completedChecklistCount: completedCount,
+    checklistCompletionPercent,
+    blockers,
+    notes: health.notes || "",
+    lastCheckInAt,
+    lastActivityAt,
+    inactiveDays,
+    checkInAgeDays,
+    riskLevel: resolveRiskLevel({
+      progressPercent,
+      blockers,
+      inactiveDays,
+      checklistCompletionPercent,
+      checkInAgeDays,
+    }),
+  };
+};
 
 const resolveHackathonForUpdate = async (hackathonId) => {
   if (hackathonId === undefined) {
@@ -409,6 +501,7 @@ const updateTeam = asyncHandler(async (req, res) => {
   }
 
   applyTeamFieldUpdates(team, req.body);
+  markTeamActivity(team);
 
   await team.save();
 
@@ -456,6 +549,7 @@ const removeMember = asyncHandler(async (req, res) => {
   }
 
   team.members = team.members.filter((entry) => entry.user.toString() !== userId);
+  markTeamActivity(team);
   await team.save();
 
   await User.findByIdAndUpdate(userId, {
@@ -499,6 +593,7 @@ const transferLeader = asyncHandler(async (req, res) => {
 
   newLeader.role = TEAM_MEMBER_ROLES.LEADER;
   team.leader = newLeaderId;
+  markTeamActivity(team);
 
   await team.save();
 
@@ -541,6 +636,85 @@ const getTeamJoinQr = asyncHandler(async (req, res) => {
   });
 });
 
+const getTeamHealth = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const team = await Team.findById(id);
+
+  if (!team) {
+    return res.status(404).json({ message: "Team not found." });
+  }
+
+  if (!hasMemberAccess(team, req.user)) {
+    return res.status(403).json({ message: "Only team members or admin can view team health." });
+  }
+
+  return res.json({
+    teamId: team._id,
+    health: buildTeamHealthSnapshot(team),
+  });
+});
+
+const updateTeamHealth = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { progressPercent, checklist, blockers, notes, checkInNow } = req.body;
+
+  const team = await Team.findById(id);
+
+  if (!team) {
+    return res.status(404).json({ message: "Team not found." });
+  }
+
+  if (!hasCreatorAccess(team, req.user)) {
+    return res.status(403).json({ message: "Only the team creator or admin can update team health." });
+  }
+
+  if (!team.health) {
+    team.health = {};
+  }
+
+  if (progressPercent !== undefined) {
+    team.health.progressPercent = progressPercent;
+  }
+
+  if (checklist !== undefined) {
+    team.health.checklist = checklist;
+  }
+
+  if (blockers !== undefined) {
+    team.health.blockers = blockers;
+  }
+
+  if (notes !== undefined) {
+    team.health.notes = notes;
+  }
+
+  if (checkInNow) {
+    team.health.lastCheckInAt = new Date();
+  }
+
+  markTeamActivity(team);
+  await team.save();
+
+  const recipientIds = team.members
+    .map((member) => member.user.toString())
+    .filter((idValue) => idValue !== req.user.id);
+
+  await createBulkNotifications(
+    recipientIds.map((user) => ({
+      user,
+      type: NOTIFICATION_TYPES.TEAM_UPDATE,
+      message: `Team health for ${team.name} was updated.`,
+      data: { teamId: team._id },
+    }))
+  );
+
+  return res.json({
+    message: "Team health updated successfully.",
+    teamId: team._id,
+    health: buildTeamHealthSnapshot(team),
+  });
+});
+
 const deleteTeam = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const team = await Team.findById(id);
@@ -576,5 +750,7 @@ module.exports = {
   removeMember,
   transferLeader,
   getTeamJoinQr,
+  getTeamHealth,
+  updateTeamHealth,
   deleteTeam,
 };

@@ -10,6 +10,10 @@ const {
 } = require("../utils/constants");
 const { createNotification } = require("../services/notification.service");
 
+const touchTeamActivity = async (teamId) => {
+  await Team.updateOne({ _id: teamId }, { $set: { "health.lastActivityAt": new Date() } });
+};
+
 const canReviewTeamRequests = (team, user) => {
   if (user.role === GLOBAL_ROLES.ADMIN) {
     return true;
@@ -52,6 +56,8 @@ const createJoinRequestByCode = asyncHandler(async (req, res) => {
     team: team._id,
     status: JOIN_REQUEST_STATUSES.PENDING,
   });
+
+  await touchTeamActivity(team._id);
 
   await createNotification({
     user: team.leader,
@@ -179,6 +185,7 @@ const reviewJoinRequest = asyncHandler(async (req, res) => {
   joinRequest.reviewedBy = req.user.id;
   joinRequest.reviewedAt = new Date();
   await joinRequest.save();
+  await touchTeamActivity(team._id);
 
   return res.json({
     message: `Join request ${decision}d successfully.`,
@@ -215,6 +222,7 @@ const cancelMyJoinRequest = asyncHandler(async (req, res) => {
   joinRequest.reviewedBy = req.user.id;
   joinRequest.reviewedAt = new Date();
   await joinRequest.save();
+  await touchTeamActivity(joinRequest.team._id);
 
   if (joinRequest.team?.leader && joinRequest.team.leader.toString() !== req.user.id) {
     await createNotification({

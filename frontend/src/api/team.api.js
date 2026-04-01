@@ -37,4 +37,12 @@ export const teamApi = {
     const { data } = await apiClient.get(`/teams/${teamId}/qr`);
     return data;
   },
+  getHealth: async (teamId) => {
+    const { data } = await apiClient.get(`/teams/${teamId}/health`);
+    return data;
+  },
+  updateHealth: async (teamId, payload) => {
+    const { data } = await apiClient.patch(`/teams/${teamId}/health`, payload);
+    return data;
+  },
 };
