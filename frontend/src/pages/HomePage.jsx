@@ -29,6 +29,12 @@ export function HomePage() {
           Discover college hackathons, create project teams, manage collaboration links, and track participation from a single platform.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            to="/about"
+            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+          >
+            About Creator
+          </Link>
           {isAuthenticated ? (
             <Link
               to={isApproved ? "/dashboard" : "/pending"}

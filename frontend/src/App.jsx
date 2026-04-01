@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { AdminPanelPage } from "./pages/AdminPanelPage";
+import { AboutPage } from "./pages/AboutPage";
 import { CreateTeamPage } from "./pages/CreateTeamPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EventsPage } from "./pages/EventsPage";
@@ -23,6 +24,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/about" element={<AboutPage />} />
 
       <Route
         path="/login"
