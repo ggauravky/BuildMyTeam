@@ -188,9 +188,9 @@ export function ProfilePage() {
 
       {profile ? (
         <>
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
                 <h2 className="text-2xl font-bold text-slate-900">{profile.name}</h2>
                 <p className="mt-1 text-sm font-semibold text-slate-700">@{profile.username}</p>
                 {profile.email ? (
@@ -202,7 +202,7 @@ export function ProfilePage() {
                 {profile.headline ? <p className="mt-2 text-sm text-slate-700">{profile.headline}</p> : null}
               </div>
 
-              <div className="space-y-2 text-right">
+              <div className="w-full space-y-2 sm:w-auto sm:text-right">
                 {profile.status ? <StatusBadge value={profile.status} /> : null}
                 <p className="text-sm font-semibold text-slate-700">Role: {profile.role}</p>
 
@@ -210,7 +210,7 @@ export function ProfilePage() {
                   <button
                     type="button"
                     onClick={onStartEdit}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 sm:w-auto"
                   >
                     <PencilLine className="h-3.5 w-3.5" />
                     Edit Profile
@@ -233,13 +233,13 @@ export function ProfilePage() {
             ) : null}
 
             {publicProfileUrl ? (
-              <p className="mt-3 inline-flex items-center gap-1 text-xs text-slate-500">
+              <p className="mt-3 flex flex-wrap items-center gap-1 text-xs text-slate-500">
                 Public URL:
                 <a
                   href={publicProfileUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-semibold text-teal-700 hover:underline"
+                  className="inline-flex items-center gap-1 break-all font-semibold text-teal-700 hover:underline"
                 >
                   {publicProfileUrl}
                   <ExternalLink className="h-3 w-3" />
@@ -297,7 +297,7 @@ export function ProfilePage() {
           </section>
 
           {canEdit && isEditing ? (
-            <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+            <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <h3 className="text-lg font-semibold text-slate-900">Edit Profile</h3>
 
               <form onSubmit={onSubmitEdit} className="mt-3 grid gap-3">
@@ -403,10 +403,10 @@ export function ProfilePage() {
                   </label>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-1 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+                    className="inline-flex w-full items-center justify-center gap-1 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 sm:w-auto"
                   >
                     <Save className="h-4 w-4" />
                     {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
@@ -414,7 +414,7 @@ export function ProfilePage() {
                   <button
                     type="button"
                     onClick={onCancelEdit}
-                    className="inline-flex items-center gap-1 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                    className="inline-flex w-full items-center justify-center gap-1 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:w-auto"
                   >
                     <X className="h-4 w-4" />
                     Cancel
@@ -425,7 +425,7 @@ export function ProfilePage() {
           ) : null}
 
           <section className="mt-6 grid gap-4 lg:grid-cols-2">
-            <article className="rounded-2xl border border-slate-200 bg-white p-5">
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
                 <Users className="h-5 w-5" /> Teams Joined
               </h3>
@@ -448,7 +448,7 @@ export function ProfilePage() {
               )}
             </article>
 
-            <article className="rounded-2xl border border-slate-200 bg-white p-5">
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
                 <Trophy className="h-5 w-5" /> Hackathons Participated
               </h3>

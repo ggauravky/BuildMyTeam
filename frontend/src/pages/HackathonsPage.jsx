@@ -30,8 +30,8 @@ export function HackathonsPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {hackathons.map((hackathon) => (
-          <article key={hackathon._id} className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="text-lg font-semibold text-slate-900">{hackathon.title}</h3>
+          <article key={hackathon._id} className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+            <h3 className="text-base font-semibold text-slate-900 sm:text-lg">{hackathon.title}</h3>
             <p className="mt-2 text-sm text-slate-600">{hackathon.description}</p>
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
               <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">

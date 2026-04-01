@@ -98,7 +98,7 @@ export function CreateTeamPage() {
         description="Create a project team and share collaboration links with members."
       />
 
-      <form className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5" onSubmit={onSubmit}>
+      <form className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" onSubmit={onSubmit}>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="text-sm font-semibold text-slate-700">
             Team For
@@ -236,7 +236,7 @@ export function CreateTeamPage() {
         <button
           type="submit"
           disabled={createMutation.isPending}
-          className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-teal-300"
+          className="w-full rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-teal-300 sm:w-auto"
         >
           {createMutation.isPending ? "Creating..." : "Create Team"}
         </button>

@@ -46,7 +46,7 @@ export function QRCodeScanner({ onCodeDetected }) {
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm font-semibold text-slate-900">Join via QR Scan</p>
         <button
           type="button"

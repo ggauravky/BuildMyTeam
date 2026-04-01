@@ -15,12 +15,12 @@ function StatCard({ label, value, icon, tone }) {
   }[tone];
 
   return (
-    <article className={`rounded-2xl border p-5 ${toneClass}`}>
+    <article className={`rounded-2xl border p-4 sm:p-5 ${toneClass}`}>
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">{label}</p>
         {createElement(icon, { className: "h-5 w-5" })}
       </div>
-      <p className="mt-4 text-3xl font-bold">{value}</p>
+      <p className="mt-3 text-2xl font-bold sm:text-3xl">{value}</p>
     </article>
   );
 }
@@ -63,7 +63,7 @@ export function DashboardPage() {
         description="Track your teams, join requests, and updates at a glance."
       />
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
         <StatCard label="Teams Joined" value={teams.length} icon={Users} tone="teal" />
         <StatCard label="My Join Requests" value={requests.length} icon={Flag} tone="amber" />
         <StatCard
@@ -74,8 +74,8 @@ export function DashboardPage() {
         />
       </section>
 
-      <section className="mt-6 grid gap-4 lg:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="mt-5 grid gap-4 lg:mt-6 lg:grid-cols-2">
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <h3 className="text-lg font-semibold text-slate-900">Your Role</h3>
           <p className="mt-2 text-sm text-slate-600">
             Global role: <span className="font-semibold capitalize text-slate-900">{user?.role}</span>
@@ -85,7 +85,7 @@ export function DashboardPage() {
           </p>
         </article>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5">
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <h3 className="text-lg font-semibold text-slate-900">Recent Team Requests</h3>
 
           {requestFeedback ? (
@@ -100,7 +100,7 @@ export function DashboardPage() {
             <ul className="mt-3 space-y-2 text-sm text-slate-700">
               {requests.slice(0, 4).map((request) => (
                 <li key={request._id} className="rounded-lg bg-slate-50 px-3 py-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <p>
                       <span className="font-semibold text-slate-900">{request.team?.name || "Unknown team"}</span>{" "}
                       <span className="capitalize">{request.status}</span>
@@ -110,7 +110,7 @@ export function DashboardPage() {
                       <button
                         type="button"
                         onClick={() => cancelJoinRequestMutation.mutate(request._id)}
-                        className="rounded-lg border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                        className="self-start rounded-lg border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
                       >
                         {cancelJoinRequestMutation.isPending ? "Cancelling..." : "Cancel Request"}
                       </button>

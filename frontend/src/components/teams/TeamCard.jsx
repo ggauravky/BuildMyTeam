@@ -7,7 +7,7 @@ export function TeamCard({ team }) {
   const contextLink = isEventTeam ? team.eventLink : team.hackathonLink;
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-slate-900">{team.name}</h3>
@@ -39,7 +39,7 @@ export function TeamCard({ team }) {
       <div className="mt-4">
         <Link
           to={`/teams/${team._id}`}
-          className="inline-flex rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+          className="inline-flex w-full justify-center rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:w-auto"
         >
           Open Team Workspace
         </Link>

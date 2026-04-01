@@ -123,12 +123,12 @@ export function TeamsPage() {
     <div>
       <PageHeader
         title="Teams"
-        description="Search teams, filter by hackathon, and request access using team join code or QR."
+        description="Search teams, filter by hackathon or event, and request access using team join code or QR."
       />
 
-      <section className="mb-6 grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="grid gap-3 md:grid-cols-2">
+      <section className="mb-5 grid gap-4 lg:mb-6 lg:grid-cols-[2fr_1fr]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm font-semibold text-slate-700">
               Search by team name
               <input
@@ -201,7 +201,7 @@ export function TeamsPage() {
           ) : null}
         </div>
 
-        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <form onSubmit={onJoinSubmit}>
             <label className="block text-sm font-semibold text-slate-700">
               Join Team by Code
@@ -244,14 +244,14 @@ export function TeamsPage() {
                   key={request._id}
                   className="rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-700"
                 >
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <span className="font-semibold text-slate-900">
                       {request.team?.name || "Unknown team"}
                     </span>
                     <button
                       type="button"
                       onClick={() => cancelRequestMutation.mutate(request._id)}
-                      className="rounded-lg border border-rose-300 px-2 py-1 font-semibold text-rose-700 hover:bg-rose-50"
+                      className="self-start rounded-lg border border-rose-300 px-2 py-1 font-semibold text-rose-700 hover:bg-rose-50"
                     >
                       {cancelRequestMutation.isPending ? "Cancelling..." : "Cancel"}
                     </button>
