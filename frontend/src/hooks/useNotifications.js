@@ -30,7 +30,13 @@ export function useNotifications() {
   return {
     notifications: query.data?.notifications || [],
     isLoading: query.isLoading,
+    isError: query.isError,
+    errorMessage:
+      query.error?.response?.data?.message ||
+      query.error?.message ||
+      "Unable to load notifications right now.",
     markRead: markReadMutation.mutateAsync,
     markAllRead: markAllMutation.mutateAsync,
+    isUpdating: markReadMutation.isPending || markAllMutation.isPending,
   };
 }
