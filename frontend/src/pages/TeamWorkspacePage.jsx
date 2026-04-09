@@ -95,6 +95,7 @@ export function TeamWorkspacePage() {
   const { user, isAdmin } = useAuth();
 
   const [message, setMessage] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [newLeaderId, setNewLeaderId] = useState("");
@@ -395,6 +396,23 @@ export function TeamWorkspacePage() {
   const pendingRequests = pendingRequestsQuery.data?.requests || [];
   const hackathons = hackathonsQuery.data?.hackathons || [];
   const events = eventsQuery.data?.events || [];
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    { id: "members", label: `Members (${team.members.length})` },
+    ...(canManage ? [{ id: "requests", label: `Requests (${pendingRequests.length})` }] : []),
+    ...(canManage ? [{ id: "settings", label: "Settings" }] : []),
+  ];
+
+  const currentTab =
+    !canManage && (activeTab === "requests" || activeTab === "settings")
+      ? "overview"
+      : activeTab;
+
+  const showOverview = currentTab === "overview";
+  const showMembers = currentTab === "members";
+  const showRequests = currentTab === "requests";
+  const showSettings = currentTab === "settings";
+
   const isEventTeam = team.trackType === "event";
   const contextLabel = isEventTeam ? "Event" : "Hackathon";
   const contextLink = isEventTeam ? team.eventLink : team.hackathonLink;
@@ -427,17 +445,17 @@ export function TeamWorkspacePage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={onToggleEditMode}
+                onClick={() => setActiveTab("requests")}
                 className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:w-auto"
               >
-                {editMode ? "Cancel Edit" : "Edit Team"}
+                Review Requests
               </button>
               <button
                 type="button"
-                onClick={onDeleteTeam}
-                className="w-full rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 sm:w-auto"
+                onClick={() => setActiveTab("settings")}
+                className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:w-auto"
               >
-                {deleteTeamMutation.isPending ? "Deleting..." : "Delete Team"}
+                Team Settings
               </button>
             </div>
           ) : null
@@ -446,29 +464,92 @@ export function TeamWorkspacePage() {
 
       {message ? <p className="mb-4 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</p> : null}
 
+      <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <article className="rounded-2xl border border-teal-200 bg-teal-50/70 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Open Seats</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{Math.max(team.maxSize - team.members.length, 0)}</p>
+        </article>
+        <article className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Health Risk</p>
+          <p className="mt-1 text-sm font-semibold capitalize text-slate-900">{toRiskLabel(healthRiskLevel)}</p>
+        </article>
+        <article className="rounded-2xl border border-blue-200 bg-blue-50/70 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Pending Requests</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{canManage ? pendingRequests.length : 0}</p>
+        </article>
+        <article className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Workspace Mode</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">{tabs.find((tab) => tab.id === currentTab)?.label || "Overview"}</p>
+        </article>
+      </section>
+
+      <section className="mb-4 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+              currentTab === tab.id
+                ? "bg-slate-900 text-white"
+                : "text-slate-700 hover:bg-slate-100"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </section>
+
       <section className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
         <div className="space-y-4">
-          <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-            <h2 className="text-lg font-semibold text-slate-900">Team Resources</h2>
-            <div className="mt-3 space-y-2 text-sm text-slate-700">
-              {contextLink ? (
-                <a href={contextLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 break-all text-teal-700 hover:underline">
-                  <Link2 className="h-4 w-4" /> {contextLabel} Link
+          {showOverview ? (
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <h2 className="text-lg font-semibold text-slate-900">Team Resources</h2>
+              <div className="mt-3 space-y-2 text-sm text-slate-700">
+                {contextLink ? (
+                  <a href={contextLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 break-all text-teal-700 hover:underline">
+                    <Link2 className="h-4 w-4" /> {contextLabel} Link
+                  </a>
+                ) : null}
+                <a href={team.links.github} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 break-all text-teal-700 hover:underline">
+                  <Link2 className="h-4 w-4" /> GitHub Repository
                 </a>
-              ) : null}
-              <a href={team.links.github} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 break-all text-teal-700 hover:underline">
-                <Link2 className="h-4 w-4" /> GitHub Repository
-              </a>
-              <a href={team.links.excalidraw} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 break-all text-teal-700 hover:underline">
-                <Link2 className="h-4 w-4" /> Excalidraw Board
-              </a>
-              <a href={team.links.whatsapp} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 break-all text-teal-700 hover:underline">
-                <Link2 className="h-4 w-4" /> WhatsApp Group
-              </a>
-            </div>
-          </article>
+                <a href={team.links.excalidraw} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 break-all text-teal-700 hover:underline">
+                  <Link2 className="h-4 w-4" /> Excalidraw Board
+                </a>
+                <a href={team.links.whatsapp} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 break-all text-teal-700 hover:underline">
+                  <Link2 className="h-4 w-4" /> WhatsApp Group
+                </a>
+              </div>
+            </article>
+          ) : null}
 
-          {editMode ? (
+          {showSettings && canManage ? (
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <h2 className="text-lg font-semibold text-slate-900">Workspace Controls</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Manage project metadata, member capacity, and destructive actions from this tab.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={onToggleEditMode}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                >
+                  {editMode ? "Close Edit Form" : "Edit Team Details"}
+                </button>
+                <button
+                  type="button"
+                  onClick={onDeleteTeam}
+                  className="rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+                >
+                  {deleteTeamMutation.isPending ? "Deleting..." : "Delete Team"}
+                </button>
+              </div>
+            </article>
+          ) : null}
+
+          {showSettings && editMode ? (
             <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <h3 className="text-lg font-semibold text-slate-900">Edit Team Details</h3>
               <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={onUpdateSubmit}>
@@ -513,113 +594,115 @@ export function TeamWorkspacePage() {
             </article>
           ) : null}
 
-          <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-slate-900">Members</h2>
-              <p className="text-xs font-semibold text-slate-500">
-                {team.members.length} of {team.maxSize} seats occupied
-              </p>
-            </div>
+          {showMembers ? (
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-lg font-semibold text-slate-900">Members</h2>
+                <p className="text-xs font-semibold text-slate-500">
+                  {team.members.length} of {team.maxSize} seats occupied
+                </p>
+              </div>
 
-            <ul className="mt-3 space-y-3">
-              {team.members.map((member) => {
-                const memberId = getMemberUserId(member);
-                const isLeader = member.role === "leader";
-                const hasAnyContactLink = Boolean(
-                  member.contactLinks?.github ||
-                    member.contactLinks?.linkedin ||
-                    member.contactLinks?.website
-                );
+              <ul className="mt-3 space-y-3">
+                {team.members.map((member) => {
+                  const memberId = getMemberUserId(member);
+                  const isLeader = member.role === "leader";
+                  const hasAnyContactLink = Boolean(
+                    member.contactLinks?.github ||
+                      member.contactLinks?.linkedin ||
+                      member.contactLinks?.website
+                  );
 
-                return (
-                  <li
-                    key={memberId}
-                    className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-3"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-slate-900">
-                          {member.user?.name || "Unknown User"}
-                        </p>
-                        <p className="text-xs font-medium text-slate-500">
-                          @{member.user?.username || "member"}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-500">
-                          Joined {formatDateTime(member.joinedAt)}
-                        </p>
-
-                        {canViewMemberEmail && member.user?.email ? (
-                          <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-600">
-                            <Mail className="h-3.5 w-3.5 text-slate-500" />
-                            {member.user.email}
+                  return (
+                    <li
+                      key={memberId}
+                      className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-3"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {member.user?.name || "Unknown User"}
                           </p>
-                        ) : null}
+                          <p className="text-xs font-medium text-slate-500">
+                            @{member.user?.username || "member"}
+                          </p>
 
-                        {hasAnyContactLink ? (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {member.contactLinks?.github ? (
-                              <a
-                                href={member.contactLinks.github}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                              >
-                                GitHub <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
-                            ) : null}
+                          <p className="mt-1 text-xs text-slate-500">
+                            Joined {formatDateTime(member.joinedAt)}
+                          </p>
 
-                            {member.contactLinks?.linkedin ? (
-                              <a
-                                href={member.contactLinks.linkedin}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                              >
-                                LinkedIn <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
-                            ) : null}
+                          {canViewMemberEmail && member.user?.email ? (
+                            <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-600">
+                              <Mail className="h-3.5 w-3.5 text-slate-500" />
+                              {member.user.email}
+                            </p>
+                          ) : null}
 
-                            {member.contactLinks?.website ? (
-                              <a
-                                href={member.contactLinks.website}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                              >
-                                Website <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
-                            ) : null}
-                          </div>
-                        ) : null}
+                          {hasAnyContactLink ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {member.contactLinks?.github ? (
+                                <a
+                                  href={member.contactLinks.github}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                >
+                                  GitHub <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              ) : null}
+
+                              {member.contactLinks?.linkedin ? (
+                                <a
+                                  href={member.contactLinks.linkedin}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                >
+                                  LinkedIn <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              ) : null}
+
+                              {member.contactLinks?.website ? (
+                                <a
+                                  href={member.contactLinks.website}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                >
+                                  Website <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <StatusBadge value={member.role} />
+                          {canManage && !isLeader ? (
+                            <button
+                              type="button"
+                              onClick={() => removeMemberMutation.mutate(memberId)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                            >
+                              <UserMinus className="h-3.5 w-3.5" /> Remove
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
+                    </li>
+                  );
+                })}
+              </ul>
 
-                      <div className="flex items-center gap-2">
-                        <StatusBadge value={member.role} />
-                        {canManage && !isLeader ? (
-                          <button
-                            type="button"
-                            onClick={() => removeMemberMutation.mutate(memberId)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                          >
-                            <UserMinus className="h-3.5 w-3.5" /> Remove
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+              {!canViewMemberEmail ? (
+                <p className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  Member emails are hidden for privacy. Contact links are available for collaboration.
+                </p>
+              ) : null}
+            </article>
+          ) : null}
 
-            {!canViewMemberEmail ? (
-              <p className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                Member emails are hidden for privacy. Contact links are available for collaboration.
-              </p>
-            ) : null}
-          </article>
-
-          {canManage ? (
+          {showMembers && canManage ? (
             <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <h2 className="text-lg font-semibold text-slate-900">Transfer Team Leader</h2>
               <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -648,7 +731,7 @@ export function TeamWorkspacePage() {
         </div>
 
         <div className="space-y-4">
-          {canViewHealth ? (
+          {(showOverview || showSettings) && canViewHealth ? (
             <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
@@ -796,7 +879,7 @@ export function TeamWorkspacePage() {
             </article>
           ) : null}
 
-          {canViewQr ? (
+          {(showOverview || showRequests) && canViewQr ? (
             <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">Join QR</h2>
@@ -825,7 +908,7 @@ export function TeamWorkspacePage() {
             </article>
           ) : null}
 
-          {canManage ? (
+          {showRequests && canManage ? (
             <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <h2 className="text-lg font-semibold text-slate-900">Pending Join Requests</h2>
 

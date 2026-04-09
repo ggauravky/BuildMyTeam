@@ -28,6 +28,51 @@ const emptySocialLinks = {
   website: "",
 };
 
+const EMPTY_HIGHLIGHT = {
+  title: "",
+  role: "",
+  description: "",
+  link: "",
+  tags: "",
+  startedAt: "",
+  endedAt: "",
+};
+
+const EMPTY_OUTCOME = {
+  label: "",
+  value: "",
+  context: "",
+};
+
+const EMPTY_ROLE_TIMELINE = {
+  organization: "",
+  role: "",
+  summary: "",
+  startDate: "",
+  endDate: "",
+  isCurrent: false,
+};
+
+const EMPTY_PORTFOLIO_ITEMS = {
+  highlights: EMPTY_HIGHLIGHT,
+  outcomes: EMPTY_OUTCOME,
+  roleTimeline: EMPTY_ROLE_TIMELINE,
+};
+
+const toDateInputValue = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return parsed.toISOString().slice(0, 10);
+};
+
 const buildFormStateFromProfile = (profile) => ({
   name: profile?.name || "",
   username: profile?.username || "",
@@ -44,6 +89,30 @@ const buildFormStateFromProfile = (profile) => ({
     hiddenHackathonKeys: profile?.profileVisibility?.hiddenHackathonKeys || [],
     showEventsParticipated: profile?.profileVisibility?.showEventsParticipated ?? true,
     hiddenEventKeys: profile?.profileVisibility?.hiddenEventKeys || [],
+  },
+  portfolio: {
+    highlights: (profile?.portfolio?.highlights || []).map((item) => ({
+      title: item?.title || "",
+      role: item?.role || "",
+      description: item?.description || "",
+      link: item?.link || "",
+      tags: (item?.tags || []).join(", "),
+      startedAt: toDateInputValue(item?.startedAt),
+      endedAt: toDateInputValue(item?.endedAt),
+    })),
+    outcomes: (profile?.portfolio?.outcomes || []).map((item) => ({
+      label: item?.label || "",
+      value: item?.value || "",
+      context: item?.context || "",
+    })),
+    roleTimeline: (profile?.portfolio?.roleTimeline || []).map((item) => ({
+      organization: item?.organization || "",
+      role: item?.role || "",
+      summary: item?.summary || "",
+      startDate: toDateInputValue(item?.startDate),
+      endDate: toDateInputValue(item?.endDate),
+      isCurrent: Boolean(item?.isCurrent),
+    })),
   },
 });
 
@@ -70,6 +139,39 @@ const toProfilePayload = (formState) => {
       showEventsParticipated: Boolean(formState.profileVisibility.showEventsParticipated),
       hiddenEventKeys: formState.profileVisibility.hiddenEventKeys || [],
     },
+    portfolio: {
+      highlights: (formState.portfolio?.highlights || [])
+        .filter((item) => item.title.trim())
+        .map((item) => ({
+          title: item.title.trim(),
+          role: item.role.trim(),
+          description: item.description.trim(),
+          link: item.link.trim(),
+          tags: item.tags
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter(Boolean),
+          startedAt: item.startedAt ? new Date(item.startedAt).toISOString() : null,
+          endedAt: item.endedAt ? new Date(item.endedAt).toISOString() : null,
+        })),
+      outcomes: (formState.portfolio?.outcomes || [])
+        .filter((item) => item.label.trim() && item.value.trim())
+        .map((item) => ({
+          label: item.label.trim(),
+          value: item.value.trim(),
+          context: item.context.trim(),
+        })),
+      roleTimeline: (formState.portfolio?.roleTimeline || [])
+        .filter((item) => item.organization.trim() && item.role.trim())
+        .map((item) => ({
+          organization: item.organization.trim(),
+          role: item.role.trim(),
+          summary: item.summary.trim(),
+          startDate: item.startDate ? new Date(item.startDate).toISOString() : null,
+          endDate: item.isCurrent ? null : item.endDate ? new Date(item.endDate).toISOString() : null,
+          isCurrent: Boolean(item.isCurrent),
+        })),
+    },
   };
 };
 
@@ -92,6 +194,11 @@ export function ProfilePage() {
       hiddenHackathonKeys: [],
       showEventsParticipated: true,
       hiddenEventKeys: [],
+    },
+    portfolio: {
+      highlights: [],
+      outcomes: [],
+      roleTimeline: [],
     },
   });
 
@@ -144,6 +251,44 @@ export function ProfilePage() {
       socialLinks: {
         ...prev.socialLinks,
         [name]: value,
+      },
+    }));
+  };
+
+  const onPortfolioItemChange = (section, index, field, value) => {
+    setFormState((prev) => {
+      const nextSection = [...(prev.portfolio?.[section] || [])];
+      nextSection[index] = {
+        ...(nextSection[index] || {}),
+        [field]: value,
+      };
+
+      return {
+        ...prev,
+        portfolio: {
+          ...prev.portfolio,
+          [section]: nextSection,
+        },
+      };
+    });
+  };
+
+  const onAddPortfolioItem = (section) => {
+    setFormState((prev) => ({
+      ...prev,
+      portfolio: {
+        ...prev.portfolio,
+        [section]: [...(prev.portfolio?.[section] || []), { ...EMPTY_PORTFOLIO_ITEMS[section] }],
+      },
+    }));
+  };
+
+  const onRemovePortfolioItem = (section, index) => {
+    setFormState((prev) => ({
+      ...prev,
+      portfolio: {
+        ...prev.portfolio,
+        [section]: (prev.portfolio?.[section] || []).filter((_, itemIndex) => itemIndex !== index),
       },
     }));
   };
@@ -241,6 +386,9 @@ export function ProfilePage() {
   const visibleHackathons = profile?.hackathonsParticipated || [];
   const allEvents = profile?.eventsParticipatedAll || profile?.eventsParticipated || [];
   const visibleEvents = profile?.eventsParticipated || [];
+  const portfolioHighlights = profile?.portfolio?.highlights || [];
+  const portfolioOutcomes = profile?.portfolio?.outcomes || [];
+  const portfolioRoleTimeline = profile?.portfolio?.roleTimeline || [];
 
   return (
     <div>
@@ -412,6 +560,117 @@ export function ProfilePage() {
             ) : null}
           </section>
 
+          <section className="mt-6 grid gap-4 lg:grid-cols-3">
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
+                <Briefcase className="h-5 w-5" /> Portfolio Highlights
+              </h3>
+
+              {portfolioHighlights.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-600">No highlights added yet.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {portfolioHighlights.map((highlight, index) => (
+                    <li
+                      key={`${highlight.title}-${index}`}
+                      className="rounded-xl border border-slate-200 px-3 py-2"
+                    >
+                      <p className="text-sm font-semibold text-slate-900">{highlight.title}</p>
+                      {highlight.role ? (
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {highlight.role}
+                        </p>
+                      ) : null}
+                      {highlight.description ? (
+                        <p className="mt-1 text-xs text-slate-600">{highlight.description}</p>
+                      ) : null}
+                      {(highlight.startedAt || highlight.endedAt) ? (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {highlight.startedAt ? new Date(highlight.startedAt).toLocaleDateString() : "Start"}
+                          {" - "}
+                          {highlight.endedAt ? new Date(highlight.endedAt).toLocaleDateString() : "Present"}
+                        </p>
+                      ) : null}
+                      {highlight.link ? (
+                        <a
+                          href={highlight.link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:underline"
+                        >
+                          Open Highlight <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
+                <Trophy className="h-5 w-5" /> Outcomes Snapshot
+              </h3>
+
+              {portfolioOutcomes.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-600">No outcomes added yet.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {portfolioOutcomes.map((outcome, index) => (
+                    <li
+                      key={`${outcome.label}-${index}`}
+                      className="rounded-xl border border-slate-200 px-3 py-2"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {outcome.label}
+                      </p>
+                      <p className="text-sm font-semibold text-slate-900">{outcome.value}</p>
+                      {outcome.context ? (
+                        <p className="mt-1 text-xs text-slate-600">{outcome.context}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
+                <CalendarDays className="h-5 w-5" /> Role Timeline
+              </h3>
+
+              {portfolioRoleTimeline.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-600">No role timeline entries yet.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {portfolioRoleTimeline.map((entry, index) => (
+                    <li
+                      key={`${entry.organization}-${entry.role}-${index}`}
+                      className="rounded-xl border border-slate-200 px-3 py-2"
+                    >
+                      <p className="text-sm font-semibold text-slate-900">{entry.role}</p>
+                      <p className="text-xs font-medium text-slate-500">{entry.organization}</p>
+                      {(entry.startDate || entry.endDate || entry.isCurrent) ? (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {entry.startDate ? new Date(entry.startDate).toLocaleDateString() : "Start"}
+                          {" - "}
+                          {entry.isCurrent
+                            ? "Present"
+                            : entry.endDate
+                              ? new Date(entry.endDate).toLocaleDateString()
+                              : "End"}
+                        </p>
+                      ) : null}
+                      {entry.summary ? (
+                        <p className="mt-1 text-xs text-slate-600">{entry.summary}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+          </section>
+
           {canEdit && isEditing ? (
             <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <h3 className="text-lg font-semibold text-slate-900">Edit Profile</h3>
@@ -480,6 +739,229 @@ export function ProfilePage() {
                     className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                 </label>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-800">Portfolio Highlights</p>
+                    <button
+                      type="button"
+                      onClick={() => onAddPortfolioItem("highlights")}
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Add Highlight
+                    </button>
+                  </div>
+
+                  <div className="mt-2 space-y-2">
+                    {(formState.portfolio?.highlights || []).map((highlight, index) => (
+                      <div key={`highlight-${index}`} className="rounded-lg border border-slate-200 bg-white p-2.5">
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <input
+                            value={highlight.title}
+                            onChange={(event) =>
+                              onPortfolioItemChange("highlights", index, "title", event.target.value)
+                            }
+                            placeholder="Highlight title"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          />
+                          <input
+                            value={highlight.role}
+                            onChange={(event) =>
+                              onPortfolioItemChange("highlights", index, "role", event.target.value)
+                            }
+                            placeholder="Role"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          />
+                          <input
+                            type="url"
+                            value={highlight.link}
+                            onChange={(event) =>
+                              onPortfolioItemChange("highlights", index, "link", event.target.value)
+                            }
+                            placeholder="https://project-link.com"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs md:col-span-2"
+                          />
+                          <textarea
+                            value={highlight.description}
+                            onChange={(event) =>
+                              onPortfolioItemChange("highlights", index, "description", event.target.value)
+                            }
+                            rows={2}
+                            placeholder="What did you build and why did it matter?"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs md:col-span-2"
+                          />
+                          <input
+                            value={highlight.tags}
+                            onChange={(event) =>
+                              onPortfolioItemChange("highlights", index, "tags", event.target.value)
+                            }
+                            placeholder="Tags (comma separated)"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs md:col-span-2"
+                          />
+                          <input
+                            type="date"
+                            value={highlight.startedAt}
+                            onChange={(event) =>
+                              onPortfolioItemChange("highlights", index, "startedAt", event.target.value)
+                            }
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          />
+                          <input
+                            type="date"
+                            value={highlight.endedAt}
+                            onChange={(event) =>
+                              onPortfolioItemChange("highlights", index, "endedAt", event.target.value)
+                            }
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onRemovePortfolioItem("highlights", index)}
+                          className="mt-2 rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                        >
+                          Remove Highlight
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-800">Outcomes Snapshot</p>
+                    <button
+                      type="button"
+                      onClick={() => onAddPortfolioItem("outcomes")}
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Add Outcome
+                    </button>
+                  </div>
+
+                  <div className="mt-2 space-y-2">
+                    {(formState.portfolio?.outcomes || []).map((outcome, index) => (
+                      <div key={`outcome-${index}`} className="rounded-lg border border-slate-200 bg-white p-2.5">
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <input
+                            value={outcome.label}
+                            onChange={(event) =>
+                              onPortfolioItemChange("outcomes", index, "label", event.target.value)
+                            }
+                            placeholder="Outcome label"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          />
+                          <input
+                            value={outcome.value}
+                            onChange={(event) =>
+                              onPortfolioItemChange("outcomes", index, "value", event.target.value)
+                            }
+                            placeholder="Value"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          />
+                          <input
+                            value={outcome.context}
+                            onChange={(event) =>
+                              onPortfolioItemChange("outcomes", index, "context", event.target.value)
+                            }
+                            placeholder="Context"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs md:col-span-2"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onRemovePortfolioItem("outcomes", index)}
+                          className="mt-2 rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                        >
+                          Remove Outcome
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-800">Role Timeline</p>
+                    <button
+                      type="button"
+                      onClick={() => onAddPortfolioItem("roleTimeline")}
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Add Role
+                    </button>
+                  </div>
+
+                  <div className="mt-2 space-y-2">
+                    {(formState.portfolio?.roleTimeline || []).map((entry, index) => (
+                      <div key={`timeline-${index}`} className="rounded-lg border border-slate-200 bg-white p-2.5">
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <input
+                            value={entry.organization}
+                            onChange={(event) =>
+                              onPortfolioItemChange("roleTimeline", index, "organization", event.target.value)
+                            }
+                            placeholder="Organization"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          />
+                          <input
+                            value={entry.role}
+                            onChange={(event) =>
+                              onPortfolioItemChange("roleTimeline", index, "role", event.target.value)
+                            }
+                            placeholder="Role"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          />
+                          <textarea
+                            value={entry.summary}
+                            onChange={(event) =>
+                              onPortfolioItemChange("roleTimeline", index, "summary", event.target.value)
+                            }
+                            rows={2}
+                            placeholder="What did you own?"
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs md:col-span-2"
+                          />
+                          <input
+                            type="date"
+                            value={entry.startDate}
+                            onChange={(event) =>
+                              onPortfolioItemChange("roleTimeline", index, "startDate", event.target.value)
+                            }
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                          />
+                          <input
+                            type="date"
+                            value={entry.endDate}
+                            onChange={(event) =>
+                              onPortfolioItemChange("roleTimeline", index, "endDate", event.target.value)
+                            }
+                            disabled={entry.isCurrent}
+                            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs disabled:cursor-not-allowed disabled:bg-slate-100"
+                          />
+                        </div>
+
+                        <label className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(entry.isCurrent)}
+                            onChange={(event) =>
+                              onPortfolioItemChange("roleTimeline", index, "isCurrent", event.target.checked)
+                            }
+                          />
+                          Current Role
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => onRemovePortfolioItem("roleTimeline", index)}
+                          className="mt-2 block rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                        >
+                          Remove Role
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">

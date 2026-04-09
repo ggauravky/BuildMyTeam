@@ -23,6 +23,8 @@ const normalizePaging = (pageInput, limitInput) => {
   return { page, limit };
 };
 
+const clampNumber = (value, min, max) => Math.min(max, Math.max(min, value));
+
 const normalizeQueryInput = (value) => (typeof value === "string" ? value.trim() : "");
 const escapeRegex = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\\$&`);
 
@@ -152,6 +154,81 @@ const buildTeamHealthSnapshot = (team) => {
       checklistCompletionPercent,
       checkInAgeDays,
     }),
+  };
+};
+
+const buildActivityHint = (inactiveDays) => {
+  if (inactiveDays <= 1) {
+    return "Active within the last day";
+  }
+
+  if (inactiveDays <= 3) {
+    return `Active ${inactiveDays} days ago`;
+  }
+
+  if (inactiveDays <= 7) {
+    return `Low activity for ${inactiveDays} days`;
+  }
+
+  return `Dormant for ${inactiveDays} days`;
+};
+
+const buildDiscoveryMetadata = (team) => {
+  const healthSnapshot = buildTeamHealthSnapshot(team);
+  const totalSeats = Number(team.maxSize || 0);
+  const filledSeats = Array.isArray(team.members) ? team.members.length : 0;
+  const seatsOpen = Math.max(totalSeats - filledSeats, 0);
+  const isFull = seatsOpen === 0;
+
+  let score = 50;
+
+  if (isFull) {
+    score -= 30;
+  } else {
+    score += clampNumber(seatsOpen * 6, 6, 24);
+  }
+
+  if (healthSnapshot.riskLevel === TEAM_HEALTH_RISK_LEVELS.ON_TRACK) {
+    score += 14;
+  } else if (healthSnapshot.riskLevel === TEAM_HEALTH_RISK_LEVELS.WATCH) {
+    score += 6;
+  } else {
+    score -= 8;
+  }
+
+  if (healthSnapshot.inactiveDays <= 1) {
+    score += 12;
+  } else if (healthSnapshot.inactiveDays <= 3) {
+    score += 8;
+  } else if (healthSnapshot.inactiveDays <= 7) {
+    score += 3;
+  } else {
+    score -= 6;
+  }
+
+  const hasCoreLinks = Boolean(team?.links?.github && team?.links?.excalidraw && team?.links?.whatsapp);
+  if (hasCoreLinks) {
+    score += 4;
+  }
+
+  const compatibilityHints = [
+    isFull ? "Team is currently full" : `${seatsOpen} seat${seatsOpen > 1 ? "s" : ""} open`,
+    buildActivityHint(healthSnapshot.inactiveDays),
+    healthSnapshot.riskLevel === TEAM_HEALTH_RISK_LEVELS.AT_RISK
+      ? "Execution risk is high, expect structured catch-up"
+      : "Momentum and execution health look stable",
+    team.trackType === TEAM_TRACK_TYPES.EVENT
+      ? "Event-focused collaboration flow"
+      : "Hackathon sprint-focused collaboration flow",
+  ];
+
+  return {
+    score: clampNumber(Math.round(score), 0, 100),
+    seatsOpen,
+    isFull,
+    riskLevel: healthSnapshot.riskLevel,
+    lastActivityAt: healthSnapshot.lastActivityAt,
+    compatibilityHints,
   };
 };
 
@@ -456,8 +533,32 @@ const listTeams = asyncHandler(async (req, res) => {
     Team.countDocuments(filter),
   ]);
 
+  const rankedTeams = teams
+    .map((team) => {
+      const teamObject = team.toObject();
+
+      return {
+        ...teamObject,
+        discoveryMeta: buildDiscoveryMetadata(team),
+      };
+    })
+    .sort((teamA, teamB) => {
+      if (teamB.discoveryMeta.score !== teamA.discoveryMeta.score) {
+        return teamB.discoveryMeta.score - teamA.discoveryMeta.score;
+      }
+
+      return new Date(teamB.createdAt).getTime() - new Date(teamA.createdAt).getTime();
+    })
+    .map((team, index) => ({
+      ...team,
+      discoveryMeta: {
+        ...team.discoveryMeta,
+        rank: skip + index + 1,
+      },
+    }));
+
   return res.json({
-    teams,
+    teams: rankedTeams,
     pagination: {
       page,
       limit,

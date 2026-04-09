@@ -5,6 +5,48 @@ const { GLOBAL_ROLES, TEAM_MEMBER_ROLES } = require("../utils/constants");
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,30}$/;
 
+const toValidDateOrNull = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const dedupeTrimmedList = (list = []) =>
+  Array.from(new Set((list || []).map((entry) => String(entry || "").trim()).filter(Boolean)));
+
+const buildPortfolioForResponse = (portfolio) => ({
+  highlights: (portfolio?.highlights || []).map((item) => ({
+    title: item.title,
+    role: item.role || "",
+    description: item.description || "",
+    link: item.link || "",
+    tags: item.tags || [],
+    startedAt: item.startedAt || null,
+    endedAt: item.endedAt || null,
+  })),
+  outcomes: (portfolio?.outcomes || []).map((item) => ({
+    label: item.label,
+    value: item.value,
+    context: item.context || "",
+  })),
+  roleTimeline: (portfolio?.roleTimeline || []).map((item) => ({
+    organization: item.organization,
+    role: item.role,
+    summary: item.summary || "",
+    startDate: item.startDate || null,
+    endDate: item.endDate || null,
+    isCurrent: Boolean(item.isCurrent),
+  })),
+});
+
 const getRoleLabel = (user, teams) => {
   if (user.role === GLOBAL_ROLES.ADMIN) {
     return "Admin";
@@ -151,6 +193,7 @@ const buildOwnProfilePayload = (user, teams) => {
     skills: user.skills || [],
     socialLinks: user.socialLinks || { github: "", linkedin: "", website: "" },
     profileVisibility,
+    portfolio: buildPortfolioForResponse(user.portfolio),
     teams,
     hackathonsParticipatedAll: allHackathons,
     hackathonsParticipated: buildHackathonsParticipated(teams, profileVisibility),
@@ -187,6 +230,7 @@ const buildPublicProfilePayload = (user, teams) => {
     bio: user.bio || "",
     skills: user.skills || [],
     socialLinks: user.socialLinks || { github: "", linkedin: "", website: "" },
+    portfolio: buildPortfolioForResponse(user.portfolio),
     teams: teamsForPublicView,
     hackathonsParticipated: buildHackathonsParticipated(teams, user.profileVisibility),
     eventsParticipated: buildEventsParticipated(teams, user.profileVisibility),
@@ -196,7 +240,7 @@ const buildPublicProfilePayload = (user, teams) => {
 
 const getMyProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user.id).select(
-    "name email username role status headline bio skills socialLinks profileVisibility moderation createdAt"
+    "name email username role status headline bio skills socialLinks profileVisibility portfolio moderation createdAt"
   );
 
   if (!user) {
@@ -217,7 +261,7 @@ const getMyProfile = asyncHandler(async (req, res) => {
 
 const updateMyProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user.id).select(
-    "name email username headline bio skills socialLinks profileVisibility"
+    "name email username headline bio skills socialLinks profileVisibility portfolio"
   );
 
   if (!user) {
@@ -232,6 +276,7 @@ const updateMyProfile = asyncHandler(async (req, res) => {
     skills,
     socialLinks,
     profileVisibility,
+    portfolio,
   } = req.body;
 
   if (name !== undefined) {
@@ -294,6 +339,35 @@ const updateMyProfile = asyncHandler(async (req, res) => {
     };
   }
 
+  if (portfolio !== undefined) {
+    const currentPortfolio = user.portfolio?.toObject ? user.portfolio.toObject() : user.portfolio || {};
+
+    user.portfolio = {
+      highlights: (portfolio.highlights ?? currentPortfolio.highlights ?? []).map((item) => ({
+        title: String(item.title || "").trim(),
+        role: String(item.role || "").trim(),
+        description: String(item.description || "").trim(),
+        link: String(item.link || "").trim(),
+        tags: dedupeTrimmedList(item.tags || []),
+        startedAt: toValidDateOrNull(item.startedAt),
+        endedAt: toValidDateOrNull(item.endedAt),
+      })),
+      outcomes: (portfolio.outcomes ?? currentPortfolio.outcomes ?? []).map((item) => ({
+        label: String(item.label || "").trim(),
+        value: String(item.value || "").trim(),
+        context: String(item.context || "").trim(),
+      })),
+      roleTimeline: (portfolio.roleTimeline ?? currentPortfolio.roleTimeline ?? []).map((item) => ({
+        organization: String(item.organization || "").trim(),
+        role: String(item.role || "").trim(),
+        summary: String(item.summary || "").trim(),
+        startDate: toValidDateOrNull(item.startDate),
+        endDate: toValidDateOrNull(item.endDate),
+        isCurrent: Boolean(item.isCurrent),
+      })),
+    };
+  }
+
   await user.save();
 
   const teams = await loadTeamsForUser(user._id);
@@ -312,7 +386,7 @@ const getPublicProfileByUsername = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findOne({ username: normalizedUsername }).select(
-    "name username role status headline bio skills socialLinks profileVisibility createdAt"
+    "name username role status headline bio skills socialLinks profileVisibility portfolio createdAt"
   );
 
   if (!user) {

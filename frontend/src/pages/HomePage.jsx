@@ -61,6 +61,39 @@ export function HomePage() {
         </div>
       </header>
 
+      <section className="mt-8 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Onboarding Funnel</p>
+            <h2 className="mt-1 text-2xl font-bold text-slate-900">Start in 3 focused steps</h2>
+          </div>
+          <Link
+            to={!isAuthenticated ? "/register" : isApproved ? "/dashboard" : "/pending"}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+          >
+            {!isAuthenticated ? "Create Account" : isApproved ? "Continue in Dashboard" : "View Approval Status"}
+          </Link>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <article className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Step 1</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">Build your profile signal</p>
+            <p className="mt-1 text-xs text-slate-600">Add skills, headline, and portfolio highlights for better team matching.</p>
+          </article>
+          <article className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Step 2</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">Discover ranked teams</p>
+            <p className="mt-1 text-xs text-slate-600">Use compatibility hints and open-seat signals to choose where to apply.</p>
+          </article>
+          <article className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Step 3</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">Operate in command center</p>
+            <p className="mt-1 text-xs text-slate-600">Run your team using workspace tabs, health checks, and faster join workflows.</p>
+          </article>
+        </div>
+      </section>
+
       <section className="mt-8 grid gap-6 xl:grid-cols-2">
         <article className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-lg">
           <div className="mb-5 flex items-center justify-between gap-2">

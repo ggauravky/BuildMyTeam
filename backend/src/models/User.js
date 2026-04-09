@@ -1,10 +1,16 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const { GLOBAL_ROLES, USER_STATUSES } = require("../utils/constants");
+const {
+  GLOBAL_ROLES,
+  NOTIFICATION_PRIORITIES,
+  NOTIFICATION_TYPES,
+  USER_STATUSES,
+} = require("../utils/constants");
 
 const USERNAME_MIN_LENGTH = 3;
 const USERNAME_MAX_LENGTH = 30;
 const USERNAME_REGEX = /^[a-z0-9_]+$/;
+const HH_MM_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const RESERVED_USERNAMES = new Set(["me"]);
 
 const warningSchema = new mongoose.Schema(
@@ -99,6 +105,191 @@ const moderationSchema = new mongoose.Schema(
         ref: "User",
         default: null,
       },
+    },
+  },
+  { _id: false }
+);
+
+const profileHighlightSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 120,
+    },
+    role: {
+      type: String,
+      trim: true,
+      maxlength: 80,
+      default: "",
+    },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
+    link: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    tags: {
+      type: [
+        {
+          type: String,
+          trim: true,
+          maxlength: 30,
+        },
+      ],
+      default: [],
+    },
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+    endedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  { _id: false }
+);
+
+const profileOutcomeSchema = new mongoose.Schema(
+  {
+    label: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 100,
+    },
+    value: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 120,
+    },
+    context: {
+      type: String,
+      trim: true,
+      maxlength: 200,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
+const profileRoleTimelineItemSchema = new mongoose.Schema(
+  {
+    organization: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 120,
+    },
+    role: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 100,
+    },
+    summary: {
+      type: String,
+      trim: true,
+      maxlength: 300,
+      default: "",
+    },
+    startDate: {
+      type: Date,
+      default: null,
+    },
+    endDate: {
+      type: Date,
+      default: null,
+    },
+    isCurrent: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { _id: false }
+);
+
+const profilePortfolioSchema = new mongoose.Schema(
+  {
+    highlights: {
+      type: [profileHighlightSchema],
+      default: [],
+    },
+    outcomes: {
+      type: [profileOutcomeSchema],
+      default: [],
+    },
+    roleTimeline: {
+      type: [profileRoleTimelineItemSchema],
+      default: [],
+    },
+  },
+  { _id: false }
+);
+
+const notificationQuietHoursSchema = new mongoose.Schema(
+  {
+    enabled: {
+      type: Boolean,
+      default: false,
+    },
+    start: {
+      type: String,
+      trim: true,
+      default: "22:00",
+      match: HH_MM_REGEX,
+    },
+    end: {
+      type: String,
+      trim: true,
+      default: "08:00",
+      match: HH_MM_REGEX,
+    },
+    timezone: {
+      type: String,
+      trim: true,
+      maxlength: 80,
+      default: "UTC",
+    },
+  },
+  { _id: false }
+);
+
+const notificationPreferencesSchema = new mongoose.Schema(
+  {
+    inAppEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    enabledPriorities: {
+      type: [
+        {
+          type: String,
+          enum: Object.values(NOTIFICATION_PRIORITIES),
+        },
+      ],
+      default: () => Object.values(NOTIFICATION_PRIORITIES),
+    },
+    mutedTypes: {
+      type: [
+        {
+          type: String,
+          enum: Object.values(NOTIFICATION_TYPES),
+        },
+      ],
+      default: [],
+    },
+    quietHours: {
+      type: notificationQuietHoursSchema,
+      default: () => ({}),
     },
   },
   { _id: false }
@@ -291,6 +482,14 @@ const userSchema = new mongoose.Schema(
         default: [],
       },
     },
+    portfolio: {
+      type: profilePortfolioSchema,
+      default: () => ({}),
+    },
+    notificationPreferences: {
+      type: notificationPreferencesSchema,
+      default: () => ({}),
+    },
     moderation: {
       type: moderationSchema,
       default: () => ({}),
@@ -354,6 +553,8 @@ userSchema.methods.toSafeObject = function toSafeObject() {
     skills: this.skills,
     socialLinks: this.socialLinks,
     profileVisibility: this.profileVisibility,
+    portfolio: this.portfolio,
+    notificationPreferences: this.notificationPreferences,
     moderation: {
       warningCount: this.moderation?.warnings?.length || 0,
       suspension: {

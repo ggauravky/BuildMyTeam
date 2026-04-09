@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, Flag, Users } from "lucide-react";
-import { createElement, useState } from "react";
+import { BellRing, CheckCircle2, CircleDashed, Flag, Rocket, Users } from "lucide-react";
+import { createElement, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { joinRequestApi } from "../api/joinRequest.api";
+import { profileApi } from "../api/profile.api";
 import { teamApi } from "../api/team.api";
 import { PageHeader } from "../components/common/PageHeader";
 import { useAuth } from "../hooks/useAuth";
@@ -28,7 +30,7 @@ function StatCard({ label, value, icon, tone }) {
 export function DashboardPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { notifications } = useNotifications();
+  const { notifications, preferences } = useNotifications();
   const [requestFeedback, setRequestFeedback] = useState("");
 
   const teamsQuery = useQuery({
@@ -39,6 +41,11 @@ export function DashboardPage() {
   const requestsQuery = useQuery({
     queryKey: ["my-join-requests"],
     queryFn: () => joinRequestApi.listMine(),
+  });
+
+  const profileQuery = useQuery({
+    queryKey: ["profile"],
+    queryFn: () => profileApi.getMine(),
   });
 
   const cancelJoinRequestMutation = useMutation({
@@ -55,6 +62,48 @@ export function DashboardPage() {
 
   const teams = teamsQuery.data?.teams || [];
   const requests = requestsQuery.data?.requests || [];
+  const profile = profileQuery.data?.profile;
+
+  const onboardingSteps = useMemo(() => {
+    const profileReady = Boolean(
+      profile?.headline?.trim() &&
+        (profile?.skills?.length || 0) >= 3 &&
+        (profile?.portfolio?.highlights?.length || 0) >= 1
+    );
+    const joinedAnyTeam = teams.length > 0;
+    const hasJoinMomentum = requests.length > 0;
+    const notificationPreferencesConfigured = Boolean(preferences?.quietHours);
+
+    return [
+      {
+        key: "profile-ready",
+        label: "Complete profile signal (headline, skills, highlight)",
+        done: profileReady,
+        cta: "/profile",
+      },
+      {
+        key: "team-joined",
+        label: "Join or create at least one team",
+        done: joinedAnyTeam,
+        cta: "/teams",
+      },
+      {
+        key: "requests-momentum",
+        label: "Send at least one join request",
+        done: hasJoinMomentum,
+        cta: "/teams",
+      },
+      {
+        key: "notification-preferences",
+        label: "Review notification preferences in topbar",
+        done: notificationPreferencesConfigured,
+        cta: "/dashboard",
+      },
+    ];
+  }, [preferences, profile, requests.length, teams.length]);
+
+  const completedOnboarding = onboardingSteps.filter((step) => step.done).length;
+  const nextOnboardingStep = onboardingSteps.find((step) => !step.done);
 
   return (
     <div>
@@ -72,6 +121,47 @@ export function DashboardPage() {
           icon={BellRing}
           tone="blue"
         />
+      </section>
+
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 lg:mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
+              <Rocket className="h-5 w-5 text-teal-700" /> Onboarding Progress
+            </h3>
+            <p className="mt-1 text-sm text-slate-600">
+              {completedOnboarding}/{onboardingSteps.length} milestones complete
+            </p>
+          </div>
+          {nextOnboardingStep ? (
+            <Link
+              to={nextOnboardingStep.cta}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700"
+            >
+              Next Action
+            </Link>
+          ) : (
+            <span className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+              Fully onboarded
+            </span>
+          )}
+        </div>
+
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {onboardingSteps.map((step) => (
+            <div
+              key={step.key}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+            >
+              {step.done ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <CircleDashed className="h-4 w-4 text-slate-500" />
+              )}
+              <p className="text-xs font-medium text-slate-700">{step.label}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="mt-5 grid gap-4 lg:mt-6 lg:grid-cols-2">

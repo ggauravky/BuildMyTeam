@@ -101,6 +101,14 @@ export function TeamsPage() {
   const pendingMyRequests = (myJoinRequestsQuery.data?.requests || []).filter(
     (request) => request.status === "pending"
   );
+  const teamsWithOpenSeats = teams.filter((team) => {
+    const openSeats =
+      typeof team.discoveryMeta?.seatsOpen === "number"
+        ? team.discoveryMeta.seatsOpen
+        : Math.max((team.maxSize || 0) - (team.members?.length || 0), 0);
+
+    return openSeats > 0;
+  });
 
   const onJoinSubmit = (event) => {
     event.preventDefault();
@@ -123,7 +131,7 @@ export function TeamsPage() {
     <div>
       <PageHeader
         title="Teams"
-        description="Search teams, filter by hackathon or event, and request access using team join code or QR."
+        description="Smart-ranked discovery for hackathon and event teams with compatibility hints and quick join flows."
       />
 
       <section className="mb-5 grid gap-4 lg:mb-6 lg:grid-cols-[2fr_1fr]">
@@ -261,6 +269,21 @@ export function TeamsPage() {
             </ul>
           </div>
         </div>
+      </section>
+
+      <section className="mb-5 grid gap-3 md:grid-cols-3 lg:mb-6">
+        <article className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Discovery Engine</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">Teams are ranked by momentum, capacity, and execution health.</p>
+        </article>
+        <article className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Open Teams</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{teamsWithOpenSeats.length}</p>
+        </article>
+        <article className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Your Pending Requests</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{pendingMyRequests.length}</p>
+        </article>
       </section>
 
       {teamsQuery.isLoading ? <p className="text-sm text-slate-600">Loading teams...</p> : null}

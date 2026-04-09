@@ -13,4 +13,12 @@ export const notificationApi = {
     const { data } = await apiClient.patch("/notifications/read-all");
     return data;
   },
+  getPreferences: async () => {
+    const { data } = await apiClient.get("/notifications/preferences");
+    return data;
+  },
+  updatePreferences: async (payload) => {
+    const { data } = await apiClient.patch("/notifications/preferences", payload);
+    return data;
+  },
 };

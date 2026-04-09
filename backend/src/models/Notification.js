@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { NOTIFICATION_TYPES } = require("../utils/constants");
+const { NOTIFICATION_PRIORITIES, NOTIFICATION_TYPES } = require("../utils/constants");
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -20,6 +20,12 @@ const notificationSchema = new mongoose.Schema(
       required: true,
       maxlength: 300,
       trim: true,
+    },
+    priority: {
+      type: String,
+      enum: Object.values(NOTIFICATION_PRIORITIES),
+      default: NOTIFICATION_PRIORITIES.MEDIUM,
+      index: true,
     },
     data: {
       type: mongoose.Schema.Types.Mixed,
