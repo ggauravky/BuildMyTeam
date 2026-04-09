@@ -42,6 +42,8 @@ const buildFormStateFromProfile = (profile) => ({
   profileVisibility: {
     showHackathonsParticipated: profile?.profileVisibility?.showHackathonsParticipated ?? true,
     hiddenHackathonKeys: profile?.profileVisibility?.hiddenHackathonKeys || [],
+    showEventsParticipated: profile?.profileVisibility?.showEventsParticipated ?? true,
+    hiddenEventKeys: profile?.profileVisibility?.hiddenEventKeys || [],
   },
 });
 
@@ -65,6 +67,8 @@ const toProfilePayload = (formState) => {
     profileVisibility: {
       showHackathonsParticipated: Boolean(formState.profileVisibility.showHackathonsParticipated),
       hiddenHackathonKeys: formState.profileVisibility.hiddenHackathonKeys || [],
+      showEventsParticipated: Boolean(formState.profileVisibility.showEventsParticipated),
+      hiddenEventKeys: formState.profileVisibility.hiddenEventKeys || [],
     },
   };
 };
@@ -86,6 +90,8 @@ export function ProfilePage() {
     profileVisibility: {
       showHackathonsParticipated: true,
       hiddenHackathonKeys: [],
+      showEventsParticipated: true,
+      hiddenEventKeys: [],
     },
   });
 
@@ -172,6 +178,36 @@ export function ProfilePage() {
     }));
   };
 
+  const onToggleEventVisibility = (key) => {
+    setFormState((prev) => {
+      const hiddenSet = new Set(prev.profileVisibility.hiddenEventKeys || []);
+
+      if (hiddenSet.has(key)) {
+        hiddenSet.delete(key);
+      } else {
+        hiddenSet.add(key);
+      }
+
+      return {
+        ...prev,
+        profileVisibility: {
+          ...prev.profileVisibility,
+          hiddenEventKeys: Array.from(hiddenSet),
+        },
+      };
+    });
+  };
+
+  const onToggleGlobalEventVisibility = () => {
+    setFormState((prev) => ({
+      ...prev,
+      profileVisibility: {
+        ...prev.profileVisibility,
+        showEventsParticipated: !prev.profileVisibility.showEventsParticipated,
+      },
+    }));
+  };
+
   const onStartEdit = () => {
     if (!profile) {
       return;
@@ -203,6 +239,8 @@ export function ProfilePage() {
 
   const allHackathons = profile?.hackathonsParticipatedAll || profile?.hackathonsParticipated || [];
   const visibleHackathons = profile?.hackathonsParticipated || [];
+  const allEvents = profile?.eventsParticipatedAll || profile?.eventsParticipated || [];
+  const visibleEvents = profile?.eventsParticipated || [];
 
   return (
     <div>
@@ -210,8 +248,8 @@ export function ProfilePage() {
         title={isPublicRoute ? "Public Profile" : "Profile"}
         description={
           isPublicRoute
-            ? "Browse this member's profile, team participation, and shared hackathon activity."
-            : "Manage your profile details and share your public profile page."
+            ? "Browse this member's profile, team participation, and shared hackathon and event activity."
+            : "Manage your profile details and control what hackathon and event participation is visible publicly."
         }
       />
 
@@ -280,15 +318,28 @@ export function ProfilePage() {
               <p className="mt-4 text-sm leading-6 text-slate-700">{profile.bio}</p>
             ) : null}
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-xs text-slate-500">Teams</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl border border-teal-200 bg-teal-50/70 px-3 py-2">
+                <p className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700">
+                  <Users className="h-3.5 w-3.5" /> Teams
+                </p>
                 <p className="text-sm font-semibold text-slate-900">{profile.teams.length}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-xs text-slate-500">Hackathons Shared</p>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2">
+                <p className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700">
+                  <Trophy className="h-3.5 w-3.5" /> Hackathons Participated
+                </p>
                 <p className="text-sm font-semibold text-slate-900">{visibleHackathons.length}</p>
               </div>
+
+              <div className="rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-2">
+                <p className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700">
+                  <CalendarDays className="h-3.5 w-3.5" /> Events Participated
+                </p>
+                <p className="text-sm font-semibold text-slate-900">{visibleEvents.length}</p>
+              </div>
+
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <p className="text-xs text-slate-500">Member Since</p>
                 <p className="text-sm font-semibold text-slate-900">
@@ -483,6 +534,59 @@ export function ProfilePage() {
                   </div>
                 </div>
 
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-800">Event Visibility</p>
+                    <button
+                      type="button"
+                      onClick={onToggleGlobalEventVisibility}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      {formState.profileVisibility.showEventsParticipated ? (
+                        <>
+                          <Eye className="h-3.5 w-3.5" /> Publicly Visible
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="h-3.5 w-3.5" /> Hidden Publicly
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <p className="mt-2 text-xs text-slate-600">
+                    Toggle your event participation section or hide individual entries.
+                  </p>
+
+                  <div className="mt-3 max-h-40 space-y-2 overflow-auto pr-1">
+                    {allEvents.length === 0 ? (
+                      <p className="text-xs text-slate-500">No event entries available yet.</p>
+                    ) : (
+                      allEvents.map((eventEntry) => {
+                        const isHidden = formState.profileVisibility.hiddenEventKeys.includes(
+                          eventEntry.key
+                        );
+
+                        return (
+                          <label
+                            key={eventEntry.key}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5"
+                          >
+                            <span className="truncate text-xs font-medium text-slate-700">
+                              {eventEntry.title}
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={!isHidden}
+                              onChange={() => onToggleEventVisibility(eventEntry.key)}
+                            />
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="text-sm font-semibold text-slate-700">
                     GitHub URL
@@ -542,7 +646,7 @@ export function ProfilePage() {
             </section>
           ) : null}
 
-          <section className="mt-6 grid gap-4 lg:grid-cols-2">
+          <section className="mt-6 grid gap-4 lg:grid-cols-3">
             <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
                 <Users className="h-5 w-5" /> Teams Joined
@@ -556,6 +660,11 @@ export function ProfilePage() {
                     <li key={team._id || team.id} className="rounded-xl border border-slate-200 px-3 py-2">
                       <p className="text-sm font-semibold text-slate-900">{team.name}</p>
                       <p className="text-xs text-slate-500">{team.projectName || "No project title"}</p>
+                      {team.trackType ? (
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {team.trackType}
+                        </p>
+                      ) : null}
                       <p className="text-xs text-slate-500">
                         Members: {team.members?.length ?? team.memberCount ?? 0}
                         {team.maxSize ? `/${team.maxSize}` : ""}
@@ -589,6 +698,41 @@ export function ProfilePage() {
                       ) : null}
                       <a
                         href={hackathon.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold text-teal-700 hover:underline"
+                      >
+                        Open Link
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <h3 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
+                <CalendarDays className="h-5 w-5" /> Events Participated
+              </h3>
+
+              {visibleEvents.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-600">No event participation found yet.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {visibleEvents.map((eventEntry, index) => (
+                    <li
+                      key={eventEntry.id || `${eventEntry.link}-${index}`}
+                      className="rounded-xl border border-slate-200 px-3 py-2"
+                    >
+                      <p className="text-sm font-semibold text-slate-900">{eventEntry.title}</p>
+                      {eventEntry.date ? (
+                        <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          {new Date(eventEntry.date).toLocaleDateString()}
+                        </p>
+                      ) : null}
+                      <a
+                        href={eventEntry.link}
                         target="_blank"
                         rel="noreferrer"
                         className="text-xs font-semibold text-teal-700 hover:underline"

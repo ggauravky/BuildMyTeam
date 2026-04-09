@@ -19,6 +19,62 @@ describe("Profile and cancellation workflows", () => {
 
     const memberLogin = await loginUser({ email: "public.member@college.edu" });
 
+    const hackathonCreation = await request(app)
+      .post("/api/hackathons")
+      .set("Authorization", `Bearer ${adminLogin.body.token}`)
+      .send({
+        title: "Profile Test Hackathon",
+        description: "Hackathon for profile participation assertions",
+        date: "2026-06-12T09:00:00.000Z",
+        link: "https://hackathons.example.com/profile-test",
+      });
+
+    expect(hackathonCreation.statusCode).toBe(201);
+
+    const eventCreation = await request(app)
+      .post("/api/events")
+      .set("Authorization", `Bearer ${adminLogin.body.token}`)
+      .send({
+        title: "Profile Test Event",
+        description: "Event for profile participation assertions",
+        date: "2026-07-20T10:00:00.000Z",
+        link: "https://events.example.com/profile-test",
+      });
+
+    expect(eventCreation.statusCode).toBe(201);
+
+    const hackathonTeam = await createTeam({
+      token: memberLogin.body.token,
+      payload: {
+        targetType: "hackathon",
+        name: "Participation Hackathon Team",
+        hackathonId: hackathonCreation.body.hackathon._id,
+        projectName: "Hackathon Participation Tracker",
+        githubLink: "https://github.com/publicbuilder/hackathon-participation",
+        excalidrawLink: "https://excalidraw.com/#json,participation-hackathon",
+        whatsappLink: "https://chat.whatsapp.com/participation-hackathon",
+        maxSize: 4,
+      },
+    });
+
+    expect(hackathonTeam.statusCode).toBe(201);
+
+    const eventTeam = await createTeam({
+      token: memberLogin.body.token,
+      payload: {
+        targetType: "event",
+        name: "Participation Event Team",
+        eventId: eventCreation.body.event._id,
+        projectName: "Event Participation Tracker",
+        githubLink: "https://github.com/publicbuilder/event-participation",
+        excalidrawLink: "https://excalidraw.com/#json,participation-event",
+        whatsappLink: "https://chat.whatsapp.com/participation-event",
+        maxSize: 4,
+      },
+    });
+
+    expect(eventTeam.statusCode).toBe(201);
+
     const updateProfile = await request(app)
       .patch("/api/profile/me")
       .set("Authorization", `Bearer ${memberLogin.body.token}`)
@@ -35,6 +91,8 @@ describe("Profile and cancellation workflows", () => {
     expect(updateProfile.statusCode).toBe(200);
     expect(updateProfile.body.profile.username).toBe("public_builder");
     expect(updateProfile.body.profile.headline).toMatch(/full-stack/i);
+    expect(updateProfile.body.profile.hackathonsParticipated.length).toBe(1);
+    expect(updateProfile.body.profile.eventsParticipated.length).toBe(1);
 
     const publicProfile = await request(app).get("/api/profile/public_builder");
 
@@ -44,6 +102,46 @@ describe("Profile and cancellation workflows", () => {
     expect(publicProfile.body.profile.socialLinks.github).toBe(
       "https://github.com/publicbuilder"
     );
+    expect(publicProfile.body.profile.hackathonsParticipated).toHaveLength(1);
+    expect(publicProfile.body.profile.eventsParticipated).toHaveLength(1);
+
+    const hideEvents = await request(app)
+      .patch("/api/profile/me")
+      .set("Authorization", `Bearer ${memberLogin.body.token}`)
+      .send({
+        profileVisibility: {
+          showEventsParticipated: false,
+        },
+      });
+
+    expect(hideEvents.statusCode).toBe(200);
+
+    const hiddenEventsPublicProfile = await request(app).get("/api/profile/public_builder");
+
+    expect(hiddenEventsPublicProfile.statusCode).toBe(200);
+    expect(hiddenEventsPublicProfile.body.profile.hackathonsParticipated).toHaveLength(1);
+    expect(hiddenEventsPublicProfile.body.profile.eventsParticipated).toHaveLength(0);
+
+    const eventVisibilityKey =
+      hideEvents.body.profile.eventsParticipatedAll?.[0]?.key ||
+      updateProfile.body.profile.eventsParticipatedAll?.[0]?.key;
+
+    const hideSpecificEvent = await request(app)
+      .patch("/api/profile/me")
+      .set("Authorization", `Bearer ${memberLogin.body.token}`)
+      .send({
+        profileVisibility: {
+          showEventsParticipated: true,
+          hiddenEventKeys: eventVisibilityKey ? [eventVisibilityKey] : [],
+        },
+      });
+
+    expect(hideSpecificEvent.statusCode).toBe(200);
+
+    const hiddenSpecificEventPublicProfile = await request(app).get("/api/profile/public_builder");
+
+    expect(hiddenSpecificEventPublicProfile.statusCode).toBe(200);
+    expect(hiddenSpecificEventPublicProfile.body.profile.eventsParticipated).toHaveLength(0);
 
     const reservedUsername = await request(app)
       .patch("/api/profile/me")

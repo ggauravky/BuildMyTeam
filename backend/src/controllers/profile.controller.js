@@ -70,11 +70,60 @@ const buildHackathonsParticipated = (teams, profileVisibility = {}, { includeHid
   return allEntries.filter((entry) => !hiddenKeys.has(entry.key));
 };
 
+const buildEventsParticipated = (teams, profileVisibility = {}, { includeHidden = false } = {}) => {
+  const eventsMap = new Map();
+  const hiddenKeys = new Set((profileVisibility.hiddenEventKeys || []).map((item) => String(item)));
+
+  teams.forEach((team) => {
+    if (!team.event && !team.eventLink) {
+      return;
+    }
+
+    if (team.event) {
+      const key = `event:${team.event._id}`;
+
+      eventsMap.set(key, {
+        key,
+        id: team.event._id,
+        title: team.event.title,
+        description: team.event.description,
+        date: team.event.date,
+        link: team.event.link,
+      });
+      return;
+    }
+
+    const key = `link:${team.eventLink}`;
+
+    eventsMap.set(key, {
+      key,
+      id: null,
+      title: team.eventLink,
+      description: "External event link",
+      date: null,
+      link: team.eventLink,
+    });
+  });
+
+  const allEntries = Array.from(eventsMap.values());
+
+  if (includeHidden) {
+    return allEntries;
+  }
+
+  if (profileVisibility.showEventsParticipated === false) {
+    return [];
+  }
+
+  return allEntries.filter((entry) => !hiddenKeys.has(entry.key));
+};
+
 const loadTeamsForUser = (userId, includeMemberEmails = true) => {
   const memberSelect = includeMemberEmails ? "name email username" : "name username";
 
   return Team.find({ "members.user": userId })
     .populate("hackathon", "title description date link")
+    .populate("event", "title description date link")
     .populate("members.user", memberSelect)
     .sort({ createdAt: -1 });
 };
@@ -83,9 +132,12 @@ const buildOwnProfilePayload = (user, teams) => {
   const profileVisibility = user.profileVisibility || {
     showHackathonsParticipated: true,
     hiddenHackathonKeys: [],
+    showEventsParticipated: true,
+    hiddenEventKeys: [],
   };
 
   const allHackathons = buildHackathonsParticipated(teams, profileVisibility, { includeHidden: true });
+  const allEvents = buildEventsParticipated(teams, profileVisibility, { includeHidden: true });
 
   return {
     id: user._id,
@@ -102,6 +154,8 @@ const buildOwnProfilePayload = (user, teams) => {
     teams,
     hackathonsParticipatedAll: allHackathons,
     hackathonsParticipated: buildHackathonsParticipated(teams, profileVisibility),
+    eventsParticipatedAll: allEvents,
+    eventsParticipated: buildEventsParticipated(teams, profileVisibility),
     createdAt: user.createdAt,
     moderation: {
       warningCount: user.moderation?.warnings?.length || 0,
@@ -114,11 +168,14 @@ const buildPublicProfilePayload = (user, teams) => {
   const teamsForPublicView = teams.map((team) => ({
     id: team._id,
     name: team.name,
+    trackType: team.trackType,
     projectName: team.projectName,
     memberCount: team.members.length,
     maxSize: team.maxSize,
     hackathonLink: team.hackathon?.link || team.hackathonLink,
     hackathonTitle: team.hackathon?.title || team.hackathonLink,
+    eventLink: team.event?.link || team.eventLink,
+    eventTitle: team.event?.title || team.eventLink,
   }));
 
   return {
@@ -132,6 +189,7 @@ const buildPublicProfilePayload = (user, teams) => {
     socialLinks: user.socialLinks || { github: "", linkedin: "", website: "" },
     teams: teamsForPublicView,
     hackathonsParticipated: buildHackathonsParticipated(teams, user.profileVisibility),
+    eventsParticipated: buildEventsParticipated(teams, user.profileVisibility),
     createdAt: user.createdAt,
   };
 };
@@ -218,6 +276,17 @@ const updateMyProfile = asyncHandler(async (req, res) => {
       hiddenHackathonKeys: Array.from(
         new Set(
           (profileVisibility.hiddenHackathonKeys ?? currentVisibility.hiddenHackathonKeys ?? [])
+            .map((entry) => String(entry || "").trim())
+            .filter(Boolean)
+        )
+      ),
+      showEventsParticipated:
+        profileVisibility.showEventsParticipated ??
+        currentVisibility.showEventsParticipated ??
+        true,
+      hiddenEventKeys: Array.from(
+        new Set(
+          (profileVisibility.hiddenEventKeys ?? currentVisibility.hiddenEventKeys ?? [])
             .map((entry) => String(entry || "").trim())
             .filter(Boolean)
         )

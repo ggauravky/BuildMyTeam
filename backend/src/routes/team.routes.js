@@ -4,6 +4,7 @@ const {
   listTeams,
   listMyTeams,
   getTeamById,
+  getTeamWorkspaceById,
   updateTeam,
   removeMember,
   transferLeader,
@@ -64,6 +65,13 @@ router.patch(
   requireTeamCreatorOrAdmin(),
   validate(updateTeamHealthSchema),
   updateTeamHealth
+);
+router.get(
+  "/:id/workspace",
+  requireAuth,
+  requireApprovedUser,
+  requireTeamMemberOrAdmin(),
+  getTeamWorkspaceById
 );
 router.get("/:id", getTeamById);
 

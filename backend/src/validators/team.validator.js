@@ -2,6 +2,7 @@ const { z } = require("zod");
 const { TEAM_TRACK_TYPES } = require("../utils/constants");
 
 const linkField = z.url();
+const optionalUrlOrEmpty = z.union([z.literal(""), z.url()]);
 const joinCodePattern = /^(\d{4,5}|[A-Z0-9]{10})$/;
 const teamTrackTypeSchema = z.enum([TEAM_TRACK_TYPES.HACKATHON, TEAM_TRACK_TYPES.EVENT]);
 
@@ -47,8 +48,8 @@ const updateTeamSchema = z
     targetType: teamTrackTypeSchema.optional(),
     hackathonId: z.string().nullable().optional(),
     eventId: z.string().nullable().optional(),
-    hackathonLink: z.url().optional(),
-    eventLink: z.url().optional(),
+    hackathonLink: optionalUrlOrEmpty.optional(),
+    eventLink: optionalUrlOrEmpty.optional(),
     projectName: z.string().min(3).max(160).optional(),
     githubLink: linkField.optional(),
     excalidrawLink: linkField.optional(),

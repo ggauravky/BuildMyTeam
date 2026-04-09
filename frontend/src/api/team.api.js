@@ -13,6 +13,10 @@ export const teamApi = {
     const { data } = await apiClient.get(`/teams/${id}`);
     return data;
   },
+  getWorkspace: async (id) => {
+    const { data } = await apiClient.get(`/teams/${id}/workspace`);
+    return data;
+  },
   create: async (payload) => {
     const { data } = await apiClient.post("/teams", payload);
     return data;

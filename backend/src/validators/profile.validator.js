@@ -31,6 +31,8 @@ const updateProfileSchema = z
       .object({
         showHackathonsParticipated: z.boolean().optional(),
         hiddenHackathonKeys: z.array(z.string().trim().min(1).max(120)).max(200).optional(),
+        showEventsParticipated: z.boolean().optional(),
+        hiddenEventKeys: z.array(z.string().trim().min(1).max(120)).max(200).optional(),
       })
       .optional(),
   })

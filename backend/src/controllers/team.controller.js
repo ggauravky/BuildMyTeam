@@ -47,13 +47,20 @@ const hasMemberAccess = (team, user) => {
     return true;
   }
 
-  return team.members.some((entry) => entry.user.toString() === user.id);
+  return team.members.some((entry) => {
+    const memberUserId =
+      entry.user && typeof entry.user === "object" && entry.user._id
+        ? entry.user._id.toString()
+        : entry.user?.toString();
+
+    return memberUserId === user.id;
+  });
 };
 
 const populateTeamQuery = (query) =>
   query
     .populate("leader", "name email")
-    .populate("members.user", "name email status")
+    .populate("members.user", "name email username status")
     .populate("hackathon", "title date link")
     .populate("event", "title date link");
 
@@ -220,14 +227,88 @@ const applyTeamFieldUpdates = (team, payload) => {
     maxSize,
   } = payload;
 
-  if (name) team.name = name;
-  if (hackathonLink) team.hackathonLink = hackathonLink;
-  if (eventLink) team.eventLink = eventLink;
-  if (projectName) team.projectName = projectName;
+  if (name !== undefined) team.name = name;
+  if (hackathonLink !== undefined) team.hackathonLink = hackathonLink;
+  if (eventLink !== undefined) team.eventLink = eventLink;
+  if (projectName !== undefined) team.projectName = projectName;
   if (typeof maxSize === "number") team.maxSize = maxSize;
-  if (githubLink) team.links.github = githubLink;
-  if (excalidrawLink) team.links.excalidraw = excalidrawLink;
-  if (whatsappLink) team.links.whatsapp = whatsappLink;
+
+  if (!team.links) {
+    team.links = {};
+  }
+
+  if (githubLink !== undefined) team.links.github = githubLink;
+  if (excalidrawLink !== undefined) team.links.excalidraw = excalidrawLink;
+  if (whatsappLink !== undefined) team.links.whatsapp = whatsappLink;
+};
+
+const resolveMemberUserId = (member) => {
+  if (!member?.user) {
+    return "";
+  }
+
+  if (typeof member.user === "string") {
+    return member.user;
+  }
+
+  if (typeof member.user.toString === "function") {
+    return member.user._id ? member.user._id.toString() : member.user.toString();
+  }
+
+  return "";
+};
+
+const resolveMemberContactLinks = (profileDoc) => {
+  const socialLinks = profileDoc?.socialLinks?.toObject
+    ? profileDoc.socialLinks.toObject()
+    : profileDoc?.socialLinks || {};
+
+  return {
+    github: socialLinks.github || "",
+    linkedin: socialLinks.linkedin || "",
+    website: socialLinks.website || "",
+  };
+};
+
+const buildTeamWorkspaceResponse = ({ team, profileMapByUserId, canViewMemberEmail, viewer }) => {
+  const teamObject = team.toObject();
+
+  teamObject.members = team.members.map((member) => {
+    const memberId = resolveMemberUserId(member);
+    const memberUser = member.user && typeof member.user === "object" ? member.user : null;
+    const profileDoc = profileMapByUserId.get(memberId);
+
+    const userPayload = {
+      _id: memberId,
+      name: memberUser?.name || "Unknown User",
+      username: profileDoc?.username || memberUser?.username || "",
+      status: memberUser?.status || "",
+    };
+
+    if (canViewMemberEmail) {
+      userPayload.email = memberUser?.email || "";
+    }
+
+    return {
+      ...member.toObject(),
+      user: userPayload,
+      contactLinks: resolveMemberContactLinks(profileDoc),
+    };
+  });
+
+  const viewerMembership = team.members.find((entry) => resolveMemberUserId(entry) === viewer.id);
+
+  return {
+    team: teamObject,
+    permissions: {
+      canManage: hasCreatorAccess(team, viewer),
+      canViewMemberEmail,
+      viewerRole:
+        viewer.role === GLOBAL_ROLES.ADMIN
+          ? GLOBAL_ROLES.ADMIN
+          : viewerMembership?.role || TEAM_MEMBER_ROLES.MEMBER,
+    },
+  };
 };
 
 const createTeam = asyncHandler(async (req, res) => {
@@ -415,7 +496,55 @@ const getTeamById = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Team not found." });
   }
 
-  return res.json({ team });
+  const teamObject = team.toObject();
+
+  teamObject.members = teamObject.members.map((member) => {
+    if (!member.user || typeof member.user !== "object") {
+      return member;
+    }
+
+    return {
+      ...member,
+      user: {
+        _id: member.user._id,
+        name: member.user.name,
+        username: member.user.username || "",
+      },
+    };
+  });
+
+  return res.json({ team: teamObject });
+});
+
+const getTeamWorkspaceById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const team = await populateTeamQuery(Team.findById(req.team?._id || id));
+
+  if (!team) {
+    return res.status(404).json({ message: "Team not found." });
+  }
+
+  if (!hasMemberAccess(team, req.user)) {
+    return res.status(403).json({ message: "Only team members or admin can access this workspace." });
+  }
+
+  const creatorId = resolveCreatorId(team);
+  const canViewMemberEmail = req.user.role === GLOBAL_ROLES.ADMIN || creatorId === req.user.id;
+  const memberIds = team.members.map((member) => resolveMemberUserId(member)).filter(Boolean);
+  const memberProfiles = await User.find({ _id: { $in: memberIds } }).select("username socialLinks");
+  const profileMapByUserId = new Map(
+    memberProfiles.map((profile) => [profile._id.toString(), profile])
+  );
+
+  return res.json(
+    buildTeamWorkspaceResponse({
+      team,
+      profileMapByUserId,
+      canViewMemberEmail,
+      viewer: req.user,
+    })
+  );
 });
 
 const updateTeam = asyncHandler(async (req, res) => {
@@ -427,7 +556,7 @@ const updateTeam = asyncHandler(async (req, res) => {
     maxSize,
   } = req.body;
 
-  const team = await Team.findById(id);
+  const team = req.team || (await Team.findById(id));
 
   if (!team) {
     return res.status(404).json({ message: "Team not found." });
@@ -462,8 +591,6 @@ const updateTeam = asyncHandler(async (req, res) => {
     return res.status(eventUpdate.statusCode).json({ message: eventUpdate.error });
   }
 
-  const nextTrackType = targetType || team.trackType;
-
   if (targetType) {
     team.trackType = targetType;
   }
@@ -476,31 +603,38 @@ const updateTeam = asyncHandler(async (req, res) => {
     team.event = eventUpdate.value;
   }
 
+  applyTeamFieldUpdates(team, req.body);
+
+  const nextTrackType = team.trackType;
+
   if (nextTrackType === TEAM_TRACK_TYPES.HACKATHON) {
-    if (team.hackathon && !req.body.hackathonLink) {
+    if (team.hackathon && !team.hackathonLink) {
       const linkedHackathon = await Hackathon.findById(team.hackathon).select("link");
       team.hackathonLink = linkedHackathon?.link || team.hackathonLink;
     }
+
     if (!team.hackathonLink) {
       return res.status(400).json({ message: "Hackathon link is required for hackathon teams." });
     }
+
     team.event = null;
     team.eventLink = "";
   }
 
   if (nextTrackType === TEAM_TRACK_TYPES.EVENT) {
-    if (team.event && !req.body.eventLink) {
+    if (team.event && !team.eventLink) {
       const linkedEvent = await Event.findById(team.event).select("link");
       team.eventLink = linkedEvent?.link || team.eventLink;
     }
+
     if (!team.eventLink) {
       return res.status(400).json({ message: "Event link is required for event teams." });
     }
+
     team.hackathon = null;
     team.hackathonLink = "";
   }
 
-  applyTeamFieldUpdates(team, req.body);
   markTeamActivity(team);
 
   await team.save();
@@ -746,6 +880,7 @@ module.exports = {
   listTeams,
   listMyTeams,
   getTeamById,
+  getTeamWorkspaceById,
   updateTeam,
   removeMember,
   transferLeader,

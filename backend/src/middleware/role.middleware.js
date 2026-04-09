@@ -31,10 +31,6 @@ const createTeamAccessGuard = ({ allowLeaderOnly = false, teamIdResolver = null 
       return res.status(401).json({ message: "Authentication required." });
     }
 
-    if (req.user.role === GLOBAL_ROLES.ADMIN) {
-      return next();
-    }
-
     const teamId = resolveTeamId(req, teamIdResolver);
 
     if (!teamId || !mongoose.Types.ObjectId.isValid(teamId)) {
@@ -45,6 +41,12 @@ const createTeamAccessGuard = ({ allowLeaderOnly = false, teamIdResolver = null 
 
     if (!team) {
       return res.status(404).json({ message: "Team not found." });
+    }
+
+    if (req.user.role === GLOBAL_ROLES.ADMIN) {
+      req.team = team;
+      req.teamMember = findTeamMember(team, req.user.id) || null;
+      return next();
     }
 
     const teamMember = findTeamMember(team, req.user.id);
@@ -76,10 +78,6 @@ const requireTeamCreatorOrAdmin = (teamIdResolver = null) => {
       return res.status(401).json({ message: "Authentication required." });
     }
 
-    if (req.user.role === GLOBAL_ROLES.ADMIN) {
-      return next();
-    }
-
     const teamId = resolveTeamId(req, teamIdResolver);
 
     if (!teamId || !mongoose.Types.ObjectId.isValid(teamId)) {
@@ -92,10 +90,15 @@ const requireTeamCreatorOrAdmin = (teamIdResolver = null) => {
       return res.status(404).json({ message: "Team not found." });
     }
 
+    if (req.user.role === GLOBAL_ROLES.ADMIN) {
+      req.team = team;
+      return next();
+    }
+
     const creatorId = team.createdBy ? team.createdBy.toString() : team.leader.toString();
 
     if (creatorId !== req.user.id.toString()) {
-      return res.status(403).json({ message: "Only the team creator can perform this action." });
+      return res.status(403).json({ message: "Only the team creator or admin can perform this action." });
     }
 
     req.team = team;

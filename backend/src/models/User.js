@@ -276,6 +276,20 @@ const userSchema = new mongoose.Schema(
         ],
         default: [],
       },
+      showEventsParticipated: {
+        type: Boolean,
+        default: true,
+      },
+      hiddenEventKeys: {
+        type: [
+          {
+            type: String,
+            trim: true,
+            maxlength: 120,
+          },
+        ],
+        default: [],
+      },
     },
     moderation: {
       type: moderationSchema,
