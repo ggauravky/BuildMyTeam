@@ -179,6 +179,18 @@ export function HomePage() {
           </div>
         </article>
       </section>
+
+      <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-xs text-slate-600">
+        <p>BuildMyTeam collaboration platform</p>
+        <div className="flex items-center gap-3">
+          <Link to="/privacy" className="font-semibold text-slate-700 hover:underline">
+            Privacy Policy
+          </Link>
+          <Link to="/terms" className="font-semibold text-slate-700 hover:underline">
+            Terms and Conditions
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -107,6 +107,18 @@ export function RegisterPage() {
               Sign in
             </Link>
           </p>
+
+          <p className="mt-3 text-xs text-slate-500">
+            By creating an account, you agree to the{" "}
+            <Link to="/terms" className="font-semibold text-slate-700 hover:underline">
+              Terms and Conditions
+            </Link>{" "}
+            and{" "}
+            <Link to="/privacy" className="font-semibold text-slate-700 hover:underline">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </section>
       </div>
     </div>

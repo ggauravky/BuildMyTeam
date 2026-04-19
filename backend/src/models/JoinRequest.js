@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { JOIN_REQUEST_STATUSES } = require("../utils/constants");
+const { JOIN_REQUEST_STATUSES, JOIN_REQUEST_TRIAGE_STAGES } = require("../utils/constants");
 
 const joinRequestSchema = new mongoose.Schema(
   {
@@ -20,6 +20,33 @@ const joinRequestSchema = new mongoose.Schema(
       enum: Object.values(JOIN_REQUEST_STATUSES),
       default: JOIN_REQUEST_STATUSES.PENDING,
       index: true,
+    },
+    triageStage: {
+      type: String,
+      enum: Object.values(JOIN_REQUEST_TRIAGE_STAGES),
+      default: JOIN_REQUEST_TRIAGE_STAGES.NEW,
+      index: true,
+    },
+    triageNote: {
+      type: String,
+      trim: true,
+      maxlength: 300,
+      default: "",
+    },
+    triageReasonTemplate: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: "",
+    },
+    triagedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    triagedAt: {
+      type: Date,
+      default: null,
     },
     reviewedBy: {
       type: mongoose.Schema.Types.ObjectId,

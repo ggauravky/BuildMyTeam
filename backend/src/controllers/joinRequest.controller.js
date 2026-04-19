@@ -1,14 +1,45 @@
 const JoinRequest = require("../models/JoinRequest");
 const Team = require("../models/Team");
 const User = require("../models/User");
+const OnboardingProgress = require("../models/OnboardingProgress");
 const asyncHandler = require("../utils/asyncHandler");
 const {
   GLOBAL_ROLES,
   JOIN_REQUEST_STATUSES,
+  JOIN_REQUEST_TRIAGE_STAGES,
   NOTIFICATION_TYPES,
   TEAM_MEMBER_ROLES,
 } = require("../utils/constants");
 const { createNotification } = require("../services/notification.service");
+
+const REJECTION_REASON_TEMPLATES = [
+  { key: "skills_mismatch", label: "Skills currently do not match sprint needs" },
+  { key: "capacity_full", label: "Team capacity is full for now" },
+  { key: "availability_conflict", label: "Availability does not match delivery timeline" },
+  { key: "scope_mismatch", label: "Project scope alignment is weak" },
+  { key: "other", label: "Other" },
+];
+
+const calculateProfileStrength = (candidate) => {
+  let score = 0;
+
+  if (candidate?.headline) {
+    score += 20;
+  }
+
+  if (candidate?.bio) {
+    score += 20;
+  }
+
+  const skillCount = Array.isArray(candidate?.skills) ? candidate.skills.length : 0;
+  score += Math.min(skillCount * 10, 40);
+
+  const socialLinks = candidate?.socialLinks || {};
+  const linkCount = [socialLinks.github, socialLinks.linkedin, socialLinks.website].filter(Boolean).length;
+  score += Math.min(linkCount * 10, 20);
+
+  return Math.min(score, 100);
+};
 
 const touchTeamActivity = async (teamId) => {
   await Team.updateOne({ _id: teamId }, { $set: { "health.lastActivityAt": new Date() } });
@@ -20,7 +51,10 @@ const canReviewTeamRequests = (team, user) => {
   }
 
   const creatorId = team.createdBy ? team.createdBy.toString() : team.leader.toString();
-  return creatorId === user.id;
+  const isCreator = creatorId === user.id;
+  const isLeader = team.leader?.toString() === user.id;
+
+  return isCreator || isLeader;
 };
 
 const createJoinRequestByCode = asyncHandler(async (req, res) => {
@@ -55,6 +89,7 @@ const createJoinRequestByCode = asyncHandler(async (req, res) => {
     user: req.user.id,
     team: team._id,
     status: JOIN_REQUEST_STATUSES.PENDING,
+    triageStage: JOIN_REQUEST_TRIAGE_STAGES.NEW,
   });
 
   await touchTeamActivity(team._id);
@@ -92,15 +127,27 @@ const listPendingRequestsForTeam = asyncHandler(async (req, res) => {
     team: teamId,
     status: JOIN_REQUEST_STATUSES.PENDING,
   })
-    .populate("user", "name email username status")
+    .populate("user", "name email username status skills headline bio socialLinks availabilityProfile")
     .sort({ createdAt: -1 });
 
-  return res.json({ requests });
+  const requestsWithSignals = requests.map((request) => ({
+    ...request.toObject(),
+    triageMeta: {
+      profileStrengthScore: calculateProfileStrength(request.user),
+      skillCount: Array.isArray(request.user?.skills) ? request.user.skills.length : 0,
+      timezone: request.user?.availabilityProfile?.timezone || "",
+    },
+  }));
+
+  return res.json({
+    requests: requestsWithSignals,
+    reasonTemplates: REJECTION_REASON_TEMPLATES,
+  });
 });
 
 const reviewJoinRequest = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { decision } = req.body;
+  const { decision, note, reasonTemplate } = req.body;
 
   const joinRequest = await JoinRequest.findById(id)
     .populate("user", "name email")
@@ -122,6 +169,33 @@ const reviewJoinRequest = asyncHandler(async (req, res) => {
 
   if (!canReviewTeamRequests(team, req.user)) {
     return res.status(403).json({ message: "Not authorized to review requests for this team." });
+  }
+
+  if (decision === "shortlist" || decision === "interview") {
+    joinRequest.triageStage =
+      decision === "shortlist"
+        ? JOIN_REQUEST_TRIAGE_STAGES.SHORTLISTED
+        : JOIN_REQUEST_TRIAGE_STAGES.INTERVIEW;
+    joinRequest.triageNote = note || "";
+    joinRequest.triagedBy = req.user.id;
+    joinRequest.triagedAt = new Date();
+    await joinRequest.save();
+    await touchTeamActivity(team._id);
+
+    await createNotification({
+      user: joinRequest.user._id,
+      type: NOTIFICATION_TYPES.TEAM_UPDATE,
+      message:
+        decision === "shortlist"
+          ? `You were shortlisted by ${team.name}.`
+          : `You were moved to interview stage by ${team.name}.`,
+      data: { teamId: team._id, joinRequestId: joinRequest._id },
+    });
+
+    return res.json({
+      message: `Join request moved to ${decision} stage.`,
+      joinRequest,
+    });
   }
 
   if (decision === "approve") {
@@ -164,6 +238,22 @@ const reviewJoinRequest = asyncHandler(async (req, res) => {
     });
 
     joinRequest.status = JOIN_REQUEST_STATUSES.APPROVED;
+    joinRequest.triageStage = JOIN_REQUEST_TRIAGE_STAGES.APPROVED;
+    joinRequest.triageNote = note || joinRequest.triageNote;
+    joinRequest.triagedBy = req.user.id;
+    joinRequest.triagedAt = new Date();
+
+    await OnboardingProgress.findOneAndUpdate(
+      { team: team._id, user: joinRequest.user._id },
+      {
+        $setOnInsert: {
+          team: team._id,
+          user: joinRequest.user._id,
+          createdBy: req.user.id,
+        },
+      },
+      { upsert: true }
+    );
 
     await createNotification({
       user: joinRequest.user._id,
@@ -173,6 +263,11 @@ const reviewJoinRequest = asyncHandler(async (req, res) => {
     });
   } else {
     joinRequest.status = JOIN_REQUEST_STATUSES.REJECTED;
+    joinRequest.triageStage = JOIN_REQUEST_TRIAGE_STAGES.REJECTED;
+    joinRequest.triageNote = note || joinRequest.triageNote;
+    joinRequest.triageReasonTemplate = reasonTemplate || joinRequest.triageReasonTemplate;
+    joinRequest.triagedBy = req.user.id;
+    joinRequest.triagedAt = new Date();
 
     await createNotification({
       user: joinRequest.user._id,

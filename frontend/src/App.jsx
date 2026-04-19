@@ -13,6 +13,8 @@ import { PendingPage } from "./pages/PendingPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { TeamWorkspacePage } from "./pages/TeamWorkspacePage";
 import { TeamsPage } from "./pages/TeamsPage";
+import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
+import { TermsPage } from "./pages/TermsPage";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { RegisterPage } from "./pages/auth/RegisterPage";
 import { AdminRoute } from "./routes/AdminRoute";
@@ -25,6 +27,8 @@ function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/about" element={<AboutPage />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
 
       <Route
         path="/login"

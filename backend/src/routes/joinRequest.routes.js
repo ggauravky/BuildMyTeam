@@ -8,7 +8,7 @@ const {
 } = require("../controllers/joinRequest.controller");
 const { requireAuth } = require("../middleware/auth.middleware");
 const { requireApprovedUser } = require("../middleware/requireApproved.middleware");
-const { requireTeamLeaderOrAdmin } = require("../middleware/role.middleware");
+const { requireTeamManagerOrAdmin } = require("../middleware/role.middleware");
 const { joinByCodeLimiter } = require("../middleware/rateLimit.middleware");
 const { validate } = require("../middleware/validate.middleware");
 const { joinByCodeSchema } = require("../validators/team.validator");
@@ -23,7 +23,7 @@ router.post("/by-code", joinByCodeLimiter, validate(joinByCodeSchema), createJoi
 router.patch("/:id/cancel", cancelMyJoinRequest);
 router.get(
   "/team/:teamId",
-  requireTeamLeaderOrAdmin((req) => req.params.teamId),
+  requireTeamManagerOrAdmin((req) => req.params.teamId),
   listPendingRequestsForTeam
 );
 router.patch("/:id/review", validate(reviewJoinRequestSchema), reviewJoinRequest);

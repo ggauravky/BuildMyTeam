@@ -17,9 +17,14 @@ export const joinRequestApi = {
     const { data } = await apiClient.get(`/join-requests/team/${teamId}`);
     return data;
   },
-  review: async (joinRequestId, decision) => {
+  review: async (joinRequestId, decisionOrPayload, extraPayload = {}) => {
+    const payload =
+      typeof decisionOrPayload === "string"
+        ? { decision: decisionOrPayload, ...extraPayload }
+        : decisionOrPayload;
+
     const { data } = await apiClient.patch(`/join-requests/${joinRequestId}/review`, {
-      decision,
+      ...payload,
     });
     return data;
   },

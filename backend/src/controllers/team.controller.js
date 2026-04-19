@@ -5,6 +5,10 @@ const User = require("../models/User");
 const Hackathon = require("../models/Hackathon");
 const Event = require("../models/Event");
 const JoinRequest = require("../models/JoinRequest");
+const Task = require("../models/Task");
+const OnboardingProgress = require("../models/OnboardingProgress");
+const DecisionLog = require("../models/DecisionLog");
+const OwnershipLedger = require("../models/OwnershipLedger");
 const asyncHandler = require("../utils/asyncHandler");
 const { generateUniqueJoinCode } = require("../utils/generateJoinCode");
 const {
@@ -41,7 +45,10 @@ const hasCreatorAccess = (team, user) => {
     return true;
   }
 
-  return resolveCreatorId(team) === user.id;
+  const creatorId = resolveCreatorId(team);
+  const leaderId = team?.leader?.toString ? team.leader.toString() : "";
+
+  return creatorId === user.id || leaderId === user.id;
 };
 
 const hasMemberAccess = (team, user) => {
@@ -967,6 +974,10 @@ const deleteTeam = asyncHandler(async (req, res) => {
   await Promise.all([
     Team.deleteOne({ _id: team._id }),
     JoinRequest.deleteMany({ team: team._id }),
+    Task.deleteMany({ team: team._id }),
+    OnboardingProgress.deleteMany({ team: team._id }),
+    DecisionLog.deleteMany({ team: team._id }),
+    OwnershipLedger.deleteMany({ team: team._id }),
     User.updateMany(
       { _id: { $in: memberIds } },
       { $pull: { teams: team._id } }

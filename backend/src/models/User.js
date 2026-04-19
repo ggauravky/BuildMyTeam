@@ -295,6 +295,36 @@ const notificationPreferencesSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const availabilityProfileSchema = new mongoose.Schema(
+  {
+    timezone: {
+      type: String,
+      trim: true,
+      maxlength: 80,
+      default: "UTC",
+    },
+    weeklyCapacityHours: {
+      type: Number,
+      min: 1,
+      max: 100,
+      default: 12,
+    },
+    currentLoadHours: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0,
+    },
+    preferredRole: {
+      type: String,
+      trim: true,
+      maxlength: 80,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
 const normalizeUsername = (value) => {
   const normalized = String(value || "")
     .toLowerCase()
@@ -490,6 +520,10 @@ const userSchema = new mongoose.Schema(
       type: notificationPreferencesSchema,
       default: () => ({}),
     },
+    availabilityProfile: {
+      type: availabilityProfileSchema,
+      default: () => ({}),
+    },
     moderation: {
       type: moderationSchema,
       default: () => ({}),
@@ -555,6 +589,7 @@ userSchema.methods.toSafeObject = function toSafeObject() {
     profileVisibility: this.profileVisibility,
     portfolio: this.portfolio,
     notificationPreferences: this.notificationPreferences,
+    availabilityProfile: this.availabilityProfile,
     moderation: {
       warningCount: this.moderation?.warnings?.length || 0,
       suspension: {

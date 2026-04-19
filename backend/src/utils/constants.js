@@ -42,6 +42,28 @@ const JOIN_REQUEST_STATUSES = {
   CANCELLED: "cancelled",
 };
 
+const JOIN_REQUEST_TRIAGE_STAGES = {
+  NEW: "new",
+  SHORTLISTED: "shortlisted",
+  INTERVIEW: "interview",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+};
+
+const TASK_STATUSES = {
+  BACKLOG: "backlog",
+  IN_PROGRESS: "in_progress",
+  REVIEW: "review",
+  DONE: "done",
+};
+
+const TASK_PRIORITIES = {
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+  CRITICAL: "critical",
+};
+
 const NOTIFICATION_TYPES = {
   JOIN_REQUEST: "join_request",
   JOIN_APPROVED: "join_approved",
@@ -81,6 +103,9 @@ module.exports = {
   TEAM_TRACK_TYPES,
   TEAM_HEALTH_RISK_LEVELS,
   JOIN_REQUEST_STATUSES,
+  JOIN_REQUEST_TRIAGE_STAGES,
+  TASK_STATUSES,
+  TASK_PRIORITIES,
   NOTIFICATION_TYPES,
   NOTIFICATION_PRIORITIES,
   NOTIFICATION_PRIORITY_BY_TYPE,

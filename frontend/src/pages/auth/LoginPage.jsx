@@ -97,6 +97,18 @@ export function LoginPage() {
               Create an account
             </Link>
           </p>
+
+          <p className="mt-3 text-xs text-slate-500">
+            By continuing, you agree to our{" "}
+            <Link to="/terms" className="font-semibold text-slate-700 hover:underline">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link to="/privacy" className="font-semibold text-slate-700 hover:underline">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </section>
       </div>
     </div>
