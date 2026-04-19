@@ -23,6 +23,7 @@ import { LoadingScreen } from "../components/common/LoadingScreen";
 import { PageHeader } from "../components/common/PageHeader";
 import { StatusBadge } from "../components/common/StatusBadge";
 import { useAuth } from "../hooks/useAuth";
+import { useWorkspaceRealtime } from "../hooks/useWorkspaceRealtime";
 
 function getMemberUserId(member) {
   if (!member?.user) {
@@ -140,6 +141,7 @@ export function TeamWorkspacePage() {
   const [ownershipDraft, setOwnershipDraft] = useState(DEFAULT_OWNERSHIP_DRAFT);
   const [capacityDraftByMember, setCapacityDraftByMember] = useState({});
   const [triageDraftByRequest, setTriageDraftByRequest] = useState({});
+  const [performanceWindowDays, setPerformanceWindowDays] = useState(14);
 
   const teamQuery = useQuery({
     queryKey: ["team", id],
@@ -193,6 +195,10 @@ export function TeamWorkspacePage() {
   const canViewQr = Boolean(isAdmin || myMembership);
   const canViewHealth = Boolean(isAdmin || myMembership);
   const canViewMemberEmail = Boolean(workspacePermissions?.canViewMemberEmail ?? canManage);
+  const workspaceRealtime = useWorkspaceRealtime({
+    teamId: id,
+    enabled: Boolean(id && canViewHealth),
+  });
 
   const teamDerivedForm = useMemo(() => {
     if (!team) {
@@ -238,6 +244,15 @@ export function TeamWorkspacePage() {
     enabled: canViewHealth,
   });
 
+  const performanceQuery = useQuery({
+    queryKey: ["team-performance-intelligence", id, performanceWindowDays],
+    queryFn: () =>
+      teamApi.getPerformanceIntelligence(id, {
+        days: performanceWindowDays,
+      }),
+    enabled: canViewHealth,
+  });
+
   const taskBoardQuery = useQuery({
     queryKey: ["team-task-board", id],
     queryFn: () => teamApi.listTasks(id),
@@ -266,6 +281,12 @@ export function TeamWorkspacePage() {
     queryKey: ["team-ownership-ledger", id],
     queryFn: () => teamApi.listOwnershipLedger(id),
     enabled: canViewHealth,
+  });
+
+  const smartMatchingQuery = useQuery({
+    queryKey: ["team-smart-matching", id],
+    queryFn: () => joinRequestApi.listRankedForTeam(id),
+    enabled: canManage,
   });
 
   const updateTeamMutation = useMutation({
@@ -318,6 +339,8 @@ export function TeamWorkspacePage() {
     onSuccess: () => {
       setMessage("Join request updated.");
       queryClient.invalidateQueries({ queryKey: ["team-pending-requests", id] });
+      queryClient.invalidateQueries({ queryKey: ["team-smart-matching", id] });
+      queryClient.invalidateQueries({ queryKey: ["team-performance-intelligence", id] });
       queryClient.invalidateQueries({ queryKey: ["team", id] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["team-action-center", id] });
@@ -362,6 +385,7 @@ export function TeamWorkspacePage() {
       queryClient.invalidateQueries({ queryKey: ["team-task-board", id] });
       queryClient.invalidateQueries({ queryKey: ["team-action-center", id] });
       queryClient.invalidateQueries({ queryKey: ["team-capacity", id] });
+      queryClient.invalidateQueries({ queryKey: ["team-performance-intelligence", id] });
     },
     onError: (error) => {
       setMessage(error.response?.data?.message || "Unable to create task.");
@@ -375,6 +399,7 @@ export function TeamWorkspacePage() {
       queryClient.invalidateQueries({ queryKey: ["team-task-board", id] });
       queryClient.invalidateQueries({ queryKey: ["team-action-center", id] });
       queryClient.invalidateQueries({ queryKey: ["team-capacity", id] });
+      queryClient.invalidateQueries({ queryKey: ["team-performance-intelligence", id] });
     },
     onError: (error) => {
       setMessage(error.response?.data?.message || "Unable to update task.");
@@ -387,6 +412,7 @@ export function TeamWorkspacePage() {
       setMessage("Capacity updated.");
       queryClient.invalidateQueries({ queryKey: ["team-capacity", id] });
       queryClient.invalidateQueries({ queryKey: ["team-action-center", id] });
+      queryClient.invalidateQueries({ queryKey: ["team-performance-intelligence", id] });
     },
     onError: (error) => {
       setMessage(error.response?.data?.message || "Unable to update capacity.");
@@ -719,37 +745,46 @@ export function TeamWorkspacePage() {
   const triageReasonTemplates = pendingRequestsQuery.data?.reasonTemplates || [];
   const actionCenterSummary = actionCenterQuery.data?.summary || {};
   const actionCenterCards = actionCenterQuery.data?.cards || [];
+  const performanceMetrics = performanceQuery.data?.metrics || {};
+  const performanceInsights = performanceQuery.data?.insights || {};
+  const performanceTrend = performanceQuery.data?.trend || [];
   const taskBoard = taskBoardQuery.data?.tasks || [];
   const capacityMembers = capacityQuery.data?.members || [];
   const onboardingRecords = onboardingPackQuery.data?.records || [];
   const decisionLogEntries = decisionLogQuery.data?.decisions || [];
   const ownershipEntries = ownershipLedgerQuery.data?.entries || [];
+  const smartMatchingResults = smartMatchingQuery.data?.rankedRequests || [];
+  const smartMatchingSignals = smartMatchingQuery.data?.teamSignals || {};
   const hackathons = hackathonsQuery.data?.hackathons || [];
   const events = eventsQuery.data?.events || [];
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "action-center", label: "Today" },
+    ...(canViewHealth ? [{ id: "performance", label: "Performance" }] : []),
     { id: "tasks", label: "Task Board" },
     { id: "capacity", label: "Capacity" },
     { id: "onboarding", label: "Onboarding Pack" },
     { id: "ledger", label: "Decision Ledger" },
     { id: "members", label: `Members (${team.members.length})` },
+    ...(canManage ? [{ id: "matching", label: `Smart Matching (${smartMatchingResults.length})` }] : []),
     ...(canManage ? [{ id: "requests", label: `Triage (${pendingRequests.length})` }] : []),
     ...(canManage ? [{ id: "settings", label: "Settings" }] : []),
   ];
 
   const currentTab =
-    !canManage && (activeTab === "requests" || activeTab === "settings")
+    !canManage && (activeTab === "requests" || activeTab === "settings" || activeTab === "matching")
       ? "overview"
       : activeTab;
 
   const showOverview = currentTab === "overview";
   const showActionCenter = currentTab === "action-center";
+  const showPerformance = currentTab === "performance";
   const showTasks = currentTab === "tasks";
   const showCapacity = currentTab === "capacity";
   const showOnboarding = currentTab === "onboarding";
   const showLedger = currentTab === "ledger";
   const showMembers = currentTab === "members";
+  const showMatching = currentTab === "matching";
   const showRequests = currentTab === "requests";
   const showSettings = currentTab === "settings";
 
@@ -804,7 +839,7 @@ export function TeamWorkspacePage() {
 
       {message ? <p className="mb-4 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</p> : null}
 
-      <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <article className="rounded-2xl border border-teal-200 bg-teal-50/70 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Open Seats</p>
           <p className="mt-1 text-2xl font-bold text-slate-900">{Math.max(team.maxSize - team.members.length, 0)}</p>
@@ -820,6 +855,13 @@ export function TeamWorkspacePage() {
         <article className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pending Triage</p>
           <p className="mt-1 text-sm font-semibold text-slate-900">{actionCenterSummary.pendingRequests || 0}</p>
+        </article>
+        <article className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Live Presence</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{workspaceRealtime.onlineCount}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-600">
+            {workspaceRealtime.realtimeStatus === "live" ? "Live sync" : "Polling fallback"}
+          </p>
         </article>
       </section>
 
@@ -884,6 +926,260 @@ export function TeamWorkspacePage() {
                     </button>
                   ))
                 )}
+              </div>
+            </article>
+          ) : null}
+
+          {showPerformance ? (
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Performance Intelligence</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Velocity, cycle time, WIP, blocker aging, conversion, and delivery risk trends.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {[7, 14, 30].map((windowDays) => (
+                    <button
+                      key={`window-${windowDays}`}
+                      type="button"
+                      onClick={() => setPerformanceWindowDays(windowDays)}
+                      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+                        performanceWindowDays === windowDays
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-300 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      {windowDays}d
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {performanceQuery.isLoading ? (
+                <p className="mt-3 text-sm text-slate-600">Loading performance intelligence...</p>
+              ) : null}
+
+              {!performanceQuery.isLoading ? (
+                <>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-xs text-slate-500">Velocity (tasks/week)</p>
+                      <p className="text-lg font-semibold text-slate-900">
+                        {performanceMetrics.velocityTasksPerWeek ?? 0}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-xs text-slate-500">Cycle Time (hours)</p>
+                      <p className="text-lg font-semibold text-slate-900">
+                        {performanceMetrics.cycleTimeHours ?? 0}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-xs text-slate-500">WIP</p>
+                      <p className="text-lg font-semibold text-slate-900">{performanceMetrics.wipCount ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-xs text-slate-500">Blocker Aging (days)</p>
+                      <p className="text-lg font-semibold text-slate-900">
+                        {performanceMetrics.blockerAgingDays ?? 0}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-xs text-slate-500">Join Conversion (%)</p>
+                      <p className="text-lg font-semibold text-slate-900">
+                        {performanceMetrics.joinRequestConversionRate ?? 0}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-xs text-slate-500">Delivery Risk</p>
+                      <p className="text-lg font-semibold capitalize text-slate-900">
+                        {toRiskLabel(performanceMetrics.currentDeliveryRiskLevel || "on_track")}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Score: {performanceMetrics.currentDeliveryRiskScore ?? 0}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Delivery Risk Trend
+                    </p>
+                    <div className="mt-2 grid gap-1.5">
+                      {performanceTrend.map((point) => (
+                        <div key={point.day}>
+                          <div className="mb-1 flex items-center justify-between text-[11px] text-slate-600">
+                            <span>{point.day}</span>
+                            <span className="font-semibold capitalize">
+                              {toRiskLabel(point.riskLevel)} ({point.riskScore})
+                            </span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                            <div
+                              className={`h-full ${
+                                point.riskScore >= 70
+                                  ? "bg-rose-500"
+                                  : point.riskScore >= 45
+                                    ? "bg-amber-500"
+                                    : "bg-emerald-500"
+                              }`}
+                              style={{ width: `${Math.min(point.riskScore || 0, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+
+                      {performanceTrend.length === 0 ? (
+                        <p className="text-xs text-slate-500">No trend points available yet.</p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <p className="mt-2 text-xs text-slate-500">
+                    Insights: {performanceInsights.completedTasksInWindow || 0} completed tasks, {" "}
+                    {performanceInsights.reviewedJoinRequestsInWindow || 0} reviewed requests in this window.
+                  </p>
+                </>
+              ) : null}
+            </article>
+          ) : null}
+
+          {showMatching && canManage ? (
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <h2 className="text-lg font-semibold text-slate-900">Smart Matching 2.0</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Candidate ranking uses Skills, Availability, Timezone, and Team Momentum with explainable scores.
+              </p>
+
+              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                <p>
+                  Team signals: timezone {smartMatchingSignals.majorityTimezone || "UTC"}, target skills {" "}
+                  {(smartMatchingSignals.targetSkills || []).join(", ") || "not enough task-tag data yet"}
+                </p>
+              </div>
+
+              {smartMatchingQuery.isLoading ? (
+                <p className="mt-3 text-sm text-slate-600">Computing candidate rankings...</p>
+              ) : null}
+
+              {!smartMatchingQuery.isLoading && smartMatchingResults.length === 0 ? (
+                <p className="mt-3 rounded-xl border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500">
+                  No pending candidates to rank right now.
+                </p>
+              ) : null}
+
+              <div className="mt-3 space-y-3">
+                {smartMatchingResults.map((candidateRank, index) => {
+                  const requestId = candidateRank.joinRequestId;
+                  const triageDraft = triageDraftByRequest[requestId] || {
+                    reasonTemplate: DEFAULT_TRIAGE_TEMPLATE,
+                    note: "",
+                  };
+
+                  return (
+                    <div key={requestId} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">
+                            #{index + 1} {candidateRank.candidate?.name || "Candidate"}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            @{candidateRank.candidate?.username || "candidate"} | {" "}
+                            {candidateRank.candidate?.timezone || "UTC"}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">
+                          Match {candidateRank.scoreBreakdown?.overall ?? 0}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 grid gap-2 md:grid-cols-2">
+                        {[
+                          ["Skills", candidateRank.scoreBreakdown?.skillsCoverage],
+                          ["Availability", candidateRank.scoreBreakdown?.availabilityOverlap],
+                          ["Timezone", candidateRank.scoreBreakdown?.timezoneFit],
+                          ["Momentum", candidateRank.scoreBreakdown?.teamMomentum],
+                        ].map(([label, value]) => (
+                          <div key={`${requestId}-${label}`}>
+                            <div className="mb-1 flex items-center justify-between text-[11px] text-slate-600">
+                              <span>{label}</span>
+                              <span className="font-semibold">{value || 0}</span>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                              <div className="h-full bg-teal-500" style={{ width: `${Math.min(value || 0, 100)}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-slate-600">
+                        {(candidateRank.explainability?.reasons || []).map((reason) => (
+                          <li key={`${requestId}-${reason}`}>{reason}</li>
+                        ))}
+                      </ul>
+
+                      <div className="mt-2 grid gap-2 md:grid-cols-2">
+                        <select
+                          value={triageDraft.reasonTemplate}
+                          onChange={(event) =>
+                            onUpdateTriageDraft(requestId, "reasonTemplate", event.target.value)
+                          }
+                          className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
+                        >
+                          {(triageReasonTemplates.length
+                            ? triageReasonTemplates
+                            : [{ key: DEFAULT_TRIAGE_TEMPLATE, label: "Skills mismatch" }]
+                          ).map((template) => (
+                            <option key={`${requestId}-${template.key}`} value={template.key}>
+                              {template.label}
+                            </option>
+                          ))}
+                        </select>
+
+                        <input
+                          value={triageDraft.note}
+                          onChange={(event) => onUpdateTriageDraft(requestId, "note", event.target.value)}
+                          placeholder="Decision note"
+                          className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
+                        />
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onTriageDecision(requestId, "shortlist")}
+                          className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        >
+                          Shortlist
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onTriageDecision(requestId, "interview")}
+                          className="rounded-lg border border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                        >
+                          Interview
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onTriageDecision(requestId, "approve")}
+                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                        >
+                          <UserPlus2 className="h-3.5 w-3.5" /> Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onTriageDecision(requestId, "reject")}
+                          className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </article>
           ) : null}
@@ -1442,6 +1738,7 @@ export function TeamWorkspacePage() {
                 {team.members.map((member) => {
                   const memberId = getMemberUserId(member);
                   const isLeader = member.role === "leader";
+                  const isOnline = workspaceRealtime.onlineMemberIds.includes(String(memberId));
                   const hasAnyContactLink = Boolean(
                     member.contactLinks?.github ||
                       member.contactLinks?.linkedin ||
@@ -1460,6 +1757,14 @@ export function TeamWorkspacePage() {
                           </p>
                           <p className="text-xs font-medium text-slate-500">
                             @{member.user?.username || "member"}
+                          </p>
+                          <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600">
+                            <span
+                              className={`inline-flex h-2 w-2 rounded-full ${
+                                isOnline ? "bg-emerald-500" : "bg-slate-300"
+                              }`}
+                            />
+                            {isOnline ? "Online" : "Offline"}
                           </p>
 
                           <p className="mt-1 text-xs text-slate-500">

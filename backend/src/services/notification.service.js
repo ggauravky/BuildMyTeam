@@ -4,6 +4,7 @@ const {
   NOTIFICATION_PRIORITIES,
   NOTIFICATION_PRIORITY_BY_TYPE,
 } = require("../utils/constants");
+const { publishNotificationEvent } = require("./realtime.service");
 
 const DEFAULT_ENABLED_PRIORITIES = Object.values(NOTIFICATION_PRIORITIES);
 
@@ -142,13 +143,17 @@ const createNotification = async ({ user, type, message, data = {}, priority }) 
     return null;
   }
 
-  return Notification.create({
+  const notification = await Notification.create({
     user,
     type,
     message,
     priority: resolvedPriority,
     data,
   });
+
+  publishNotificationEvent({ userId: user, notification });
+
+  return notification;
 };
 
 const createBulkNotifications = async (notifications) => {
@@ -195,7 +200,16 @@ const createBulkNotifications = async (notifications) => {
     return [];
   }
 
-  return Notification.insertMany(deliverableNotifications);
+  const createdNotifications = await Notification.insertMany(deliverableNotifications);
+
+  createdNotifications.forEach((notification) => {
+    publishNotificationEvent({
+      userId: notification.user,
+      notification,
+    });
+  });
+
+  return createdNotifications;
 };
 
 module.exports = {

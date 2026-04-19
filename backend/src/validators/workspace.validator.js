@@ -5,6 +5,10 @@ const isoDateOrNullSchema = z.union([z.string().trim().min(1), z.null()]);
 const taskStatusEnum = z.enum(Object.values(TASK_STATUSES));
 const taskPriorityEnum = z.enum(Object.values(TASK_PRIORITIES));
 
+const performanceWindowQuerySchema = z.object({
+  days: z.coerce.number().int().min(7).max(90).optional(),
+});
+
 const createTaskSchema = z.object({
   title: z.string().trim().min(3).max(160),
   description: z.string().trim().max(1200).optional(),
@@ -107,6 +111,7 @@ const updateOwnershipEntrySchema = z
   });
 
 module.exports = {
+  performanceWindowQuerySchema,
   createTaskSchema,
   updateTaskSchema,
   updateCapacitySchema,

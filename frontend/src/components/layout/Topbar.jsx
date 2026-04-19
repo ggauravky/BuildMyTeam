@@ -81,6 +81,7 @@ function NotificationsPanel({
   preferencesError,
   isUpdatingPreferences,
   preferencesFeedback,
+  realtimeStatus,
   onMarkRead,
   onMarkAllRead,
   onClose,
@@ -98,6 +99,15 @@ function NotificationsPanel({
         <div>
           <p className="text-sm font-semibold text-slate-900">Notifications</p>
           <p className="text-xs text-slate-500">{unreadCount} unread</p>
+          <p
+            className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              realtimeStatus === "live"
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-slate-200 text-slate-600"
+            }`}
+          >
+            {realtimeStatus === "live" ? "Live" : "Polling"}
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -363,6 +373,7 @@ export function Topbar({ onMenuClick }) {
     preferencesError,
     updatePreferences,
     isUpdatingPreferences,
+    realtimeStatus,
   } = useNotifications({ priorities: priorityFilters });
 
   const unreadCount = useMemo(
@@ -530,6 +541,7 @@ export function Topbar({ onMenuClick }) {
         preferencesError={preferencesError}
         isUpdatingPreferences={isUpdatingPreferences}
         preferencesFeedback={preferencesFeedback}
+        realtimeStatus={realtimeStatus}
         onMarkRead={onMarkRead}
         onMarkAllRead={onMarkAllRead}
         onClose={onCloseNotifications}
@@ -569,6 +581,7 @@ export function Topbar({ onMenuClick }) {
                 preferencesError={preferencesError}
                 isUpdatingPreferences={isUpdatingPreferences}
                 preferencesFeedback={preferencesFeedback}
+                realtimeStatus={realtimeStatus}
                 onMarkRead={onMarkRead}
                 onMarkAllRead={onMarkAllRead}
                 onClose={onCloseNotifications}

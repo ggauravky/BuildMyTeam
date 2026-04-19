@@ -1,4 +1,6 @@
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { buildStreamUrl } from "../api/client";
 import { notificationApi } from "../api/notification.api";
 import { useAuth } from "./useAuth";
 
@@ -29,6 +31,53 @@ export function useNotifications({ priorities = [] } = {}) {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
   const priorityParam = normalizePriorities(priorities);
+  const [realtimeStatus, setRealtimeStatus] = useState("polling");
+  const refreshTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (!isAuthenticated || typeof EventSource === "undefined") {
+      return undefined;
+    }
+
+    const streamUrl = buildStreamUrl("/notifications/stream");
+    const stream = new EventSource(streamUrl, { withCredentials: true });
+
+    const queueRefresh = () => {
+      if (refreshTimeoutRef.current) {
+        return;
+      }
+
+      refreshTimeoutRef.current = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        refreshTimeoutRef.current = null;
+      }, 250);
+    };
+
+    stream.onopen = () => {
+      setRealtimeStatus("live");
+    };
+
+    stream.addEventListener("connected", () => {
+      setRealtimeStatus("live");
+    });
+
+    stream.addEventListener("notification", queueRefresh);
+
+    stream.onerror = () => {
+      setRealtimeStatus("polling");
+    };
+
+    return () => {
+      stream.close();
+
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
+
+      setRealtimeStatus("polling");
+    };
+  }, [isAuthenticated, queryClient]);
 
   const query = useQuery({
     queryKey: ["notifications", priorityParam],
@@ -38,7 +87,7 @@ export function useNotifications({ priorities = [] } = {}) {
         ...(priorityParam ? { priorities: priorityParam } : {}),
       }),
     enabled: isAuthenticated,
-    refetchInterval: 25000,
+    refetchInterval: realtimeStatus === "live" ? false : 25000,
   });
 
   const preferencesQuery = useQuery({
@@ -95,6 +144,7 @@ export function useNotifications({ priorities = [] } = {}) {
       preferencesQuery.error?.response?.data?.message ||
       preferencesQuery.error?.message ||
       "Unable to load notification preferences right now.",
+    realtimeStatus,
     updatePreferences: updatePreferencesMutation.mutateAsync,
     isUpdatingPreferences: updatePreferencesMutation.isPending,
   };

@@ -3,6 +3,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
+const { randomUUID } = require("node:crypto");
 const { URL } = require("node:url");
 const routes = require("./routes");
 const { clientUrl, nodeEnv } = require("./config/env");
@@ -101,7 +102,20 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(helmet());
-app.use(morgan("dev"));
+app.use((req, res, next) => {
+  const requestIdHeader = req.headers["x-request-id"];
+  const requestId =
+    (Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader) || randomUUID();
+
+  req.requestId = String(requestId);
+  res.setHeader("x-request-id", String(requestId));
+  next();
+});
+
+morgan.token("request-id", (req) => req.requestId || "-");
+morgan.token("request-path", (req) => req.originalUrl?.split("?")[0] || req.path || "-");
+
+app.use(morgan(":request-id :method :request-path :status :response-time ms"));
 app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));

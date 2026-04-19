@@ -53,6 +53,10 @@ export const teamApi = {
     const { data } = await apiClient.get(`/teams/${teamId}/action-center`);
     return data;
   },
+  getPerformanceIntelligence: async (teamId, params = {}) => {
+    const { data } = await apiClient.get(`/teams/${teamId}/performance-intelligence`, { params });
+    return data;
+  },
   listTasks: async (teamId, params = {}) => {
     const { data } = await apiClient.get(`/teams/${teamId}/tasks`, { params });
     return data;

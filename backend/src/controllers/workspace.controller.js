@@ -14,8 +14,60 @@ const {
   TASK_STATUSES,
 } = require("../utils/constants");
 const { createNotification } = require("../services/notification.service");
+const {
+  registerTeamWorkspaceStream,
+  publishTeamWorkspaceEvent,
+} = require("../services/realtime.service");
 
 const ACTIVE_TASK_STATUSES = [TASK_STATUSES.BACKLOG, TASK_STATUSES.IN_PROGRESS, TASK_STATUSES.REVIEW];
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_PERFORMANCE_WINDOW_DAYS = 14;
+const MIN_PERFORMANCE_WINDOW_DAYS = 7;
+const MAX_PERFORMANCE_WINDOW_DAYS = 90;
+
+const clampPerformanceWindowDays = (value) => {
+  const parsed = Number.parseInt(String(value || DEFAULT_PERFORMANCE_WINDOW_DAYS), 10);
+
+  if (Number.isNaN(parsed)) {
+    return DEFAULT_PERFORMANCE_WINDOW_DAYS;
+  }
+
+  return Math.min(Math.max(parsed, MIN_PERFORMANCE_WINDOW_DAYS), MAX_PERFORMANCE_WINDOW_DAYS);
+};
+
+const startOfDay = (value) => {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const formatDayKey = (value) => startOfDay(value).toISOString().slice(0, 10);
+
+const safeAverage = (values) => {
+  if (!values.length) {
+    return 0;
+  }
+
+  const total = values.reduce((sum, entry) => sum + entry, 0);
+  return total / values.length;
+};
+
+const toRoundedNumber = (value, digits = 1) => {
+  const multiplier = 10 ** digits;
+  return Math.round((Number(value) + Number.EPSILON) * multiplier) / multiplier;
+};
+
+const resolveRiskLevelFromScore = (score) => {
+  if (score >= 70) {
+    return "at_risk";
+  }
+
+  if (score >= 45) {
+    return "watch";
+  }
+
+  return "on_track";
+};
 
 const resolveMemberUserId = (member) => {
   if (!member?.user) {
@@ -176,6 +228,15 @@ const createTask = asyncHandler(async (req, res) => {
       .populate("assignee", "name username availabilityProfile")
       .populate("createdBy", "name username");
 
+    publishTeamWorkspaceEvent({
+      teamId: team._id,
+      type: "task_created",
+      actorId: req.user.id,
+      payload: {
+        task: mapTaskPayload(populatedTask),
+      },
+    });
+
     return res.status(201).json({ message: "Task created successfully.", task: mapTaskPayload(populatedTask) });
   } catch (error) {
     return handleControllerError(error, res);
@@ -280,6 +341,15 @@ const updateTask = asyncHandler(async (req, res) => {
     const populatedTask = await Task.findById(task._id)
       .populate("assignee", "name username availabilityProfile")
       .populate("createdBy", "name username");
+
+    publishTeamWorkspaceEvent({
+      teamId: team._id,
+      type: "task_updated",
+      actorId: req.user.id,
+      payload: {
+        task: mapTaskPayload(populatedTask),
+      },
+    });
 
     return res.json({ message: "Task updated successfully.", task: mapTaskPayload(populatedTask) });
   } catch (error) {
@@ -409,14 +479,25 @@ const updateMemberCapacity = asyncHandler(async (req, res) => {
     await user.save();
     await touchTeamActivity(team._id || id);
 
+    const capacityPayload = {
+      memberId: user._id,
+      name: user.name,
+      username: user.username,
+      availabilityProfile: user.availabilityProfile,
+    };
+
+    publishTeamWorkspaceEvent({
+      teamId: team._id,
+      type: "capacity_updated",
+      actorId: req.user.id,
+      payload: {
+        member: capacityPayload,
+      },
+    });
+
     return res.json({
       message: "Capacity updated successfully.",
-      member: {
-        memberId: user._id,
-        name: user.name,
-        username: user.username,
-        availabilityProfile: user.availabilityProfile,
-      },
+      member: capacityPayload,
     });
   } catch (error) {
     return handleControllerError(error, res);
@@ -520,6 +601,162 @@ const getActionCenter = asyncHandler(async (req, res) => {
   });
 });
 
+const getPerformanceIntelligence = asyncHandler(async (req, res) => {
+  const team = await resolveTeamFromRequest(req);
+
+  if (!team) {
+    return res.status(404).json({ message: "Team not found." });
+  }
+
+  const windowDays = clampPerformanceWindowDays(req.query.days);
+  const now = new Date();
+  const windowStart = startOfDay(now.getTime() - (windowDays - 1) * DAY_MS);
+  const trendSpanDays = Math.min(windowDays, 14);
+  const trendStart = startOfDay(now.getTime() - (trendSpanDays - 1) * DAY_MS);
+
+  const [tasks, joinRequests, capacityRows] = await Promise.all([
+    Task.find({
+      team: team._id,
+      $or: [
+        { createdAt: { $gte: windowStart } },
+        { completedAt: { $gte: windowStart } },
+        { status: { $in: ACTIVE_TASK_STATUSES } },
+      ],
+    }).select("status createdAt completedAt dueDate blockedReason updatedAt"),
+    JoinRequest.find({
+      team: team._id,
+      $or: [
+        { createdAt: { $gte: windowStart } },
+        { reviewedAt: { $gte: windowStart } },
+        { status: JOIN_REQUEST_STATUSES.PENDING },
+      ],
+    }).select("status createdAt reviewedAt"),
+    computeCapacityRows(team),
+  ]);
+
+  const activeTasks = tasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.status));
+  const completedTasksInWindow = tasks.filter(
+    (task) => task.status === TASK_STATUSES.DONE && task.completedAt && task.completedAt >= windowStart
+  );
+  const cycleTimeHours = safeAverage(
+    completedTasksInWindow
+      .filter((task) => task.createdAt && task.completedAt)
+      .map((task) => (new Date(task.completedAt) - new Date(task.createdAt)) / (60 * 60 * 1000))
+  );
+
+  const blockedActiveTasks = activeTasks.filter((task) => String(task.blockedReason || "").trim());
+  const blockerAgingDays = safeAverage(
+    blockedActiveTasks.map((task) => {
+      const updatedAt = task.updatedAt || task.createdAt || now;
+      return Math.max((now - new Date(updatedAt)) / DAY_MS, 0);
+    })
+  );
+  const overdueTasks = activeTasks.filter(
+    (task) => task.dueDate && new Date(task.dueDate).getTime() < now.getTime()
+  ).length;
+  const unassignedTasks = activeTasks.filter((task) => !task.assignee).length;
+
+  const reviewedJoinRequests = joinRequests.filter(
+    (request) =>
+      request.reviewedAt &&
+      request.reviewedAt >= windowStart &&
+      [JOIN_REQUEST_STATUSES.APPROVED, JOIN_REQUEST_STATUSES.REJECTED].includes(request.status)
+  );
+  const approvedJoinRequests = reviewedJoinRequests.filter(
+    (request) => request.status === JOIN_REQUEST_STATUSES.APPROVED
+  );
+
+  const overloadedMembers = capacityRows.filter((row) => row.risk === "overloaded").length;
+  const watchMembers = capacityRows.filter((row) => row.risk === "watch").length;
+
+  const currentRiskScore = Math.min(
+    100,
+    Math.max(
+      0,
+      overdueTasks * 12 +
+        blockedActiveTasks.length * 10 +
+        overloadedMembers * 15 +
+        watchMembers * 8 +
+        unassignedTasks * 6 +
+        Math.max(activeTasks.length - 10, 0) * 3 -
+        Math.min(completedTasksInWindow.length * 2, 20)
+    )
+  );
+
+  const completedByDay = new Map();
+  const pendingCreatedByDay = new Map();
+
+  completedTasksInWindow.forEach((task) => {
+    const dayKey = formatDayKey(task.completedAt);
+    completedByDay.set(dayKey, (completedByDay.get(dayKey) || 0) + 1);
+  });
+
+  joinRequests
+    .filter(
+      (request) =>
+        request.status === JOIN_REQUEST_STATUSES.PENDING &&
+        request.createdAt &&
+        request.createdAt >= trendStart
+    )
+    .forEach((request) => {
+      const dayKey = formatDayKey(request.createdAt);
+      pendingCreatedByDay.set(dayKey, (pendingCreatedByDay.get(dayKey) || 0) + 1);
+    });
+
+  const trend = Array.from({ length: trendSpanDays }, (_, index) => {
+    const day = startOfDay(trendStart.getTime() + index * DAY_MS);
+    const dayKey = formatDayKey(day);
+    const completedCount = completedByDay.get(dayKey) || 0;
+    const pendingCreated = pendingCreatedByDay.get(dayKey) || 0;
+    const score = Math.min(
+      100,
+      Math.max(
+        0,
+        35 +
+          pendingCreated * 12 +
+          blockedActiveTasks.length * 5 +
+          overloadedMembers * 7 +
+          watchMembers * 4 -
+          completedCount * 8
+      )
+    );
+
+    return {
+      day: dayKey,
+      completedCount,
+      pendingCreated,
+      riskScore: score,
+      riskLevel: resolveRiskLevelFromScore(score),
+    };
+  });
+
+  return res.json({
+    generatedAt: now,
+    windowDays,
+    metrics: {
+      velocityTasksPerWeek: toRoundedNumber((completedTasksInWindow.length / windowDays) * 7),
+      cycleTimeHours: toRoundedNumber(cycleTimeHours),
+      wipCount: activeTasks.length,
+      blockerAgingDays: toRoundedNumber(blockerAgingDays),
+      joinRequestConversionRate: reviewedJoinRequests.length
+        ? toRoundedNumber((approvedJoinRequests.length / reviewedJoinRequests.length) * 100)
+        : 0,
+      currentDeliveryRiskScore: toRoundedNumber(currentRiskScore),
+      currentDeliveryRiskLevel: resolveRiskLevelFromScore(currentRiskScore),
+    },
+    insights: {
+      completedTasksInWindow: completedTasksInWindow.length,
+      reviewedJoinRequestsInWindow: reviewedJoinRequests.length,
+      approvedJoinRequestsInWindow: approvedJoinRequests.length,
+      overdueTasks,
+      blockedTasks: blockedActiveTasks.length,
+      overloadedMembers,
+      watchMembers,
+    },
+    trend,
+  });
+});
+
 const listOnboardingPack = asyncHandler(async (req, res) => {
   const team = await resolveTeamFromRequest(req);
 
@@ -566,6 +803,15 @@ const initOnboardingPackForMember = asyncHandler(async (req, res) => {
 
     await touchTeamActivity(team._id);
 
+    publishTeamWorkspaceEvent({
+      teamId: team._id,
+      type: "onboarding_initialized",
+      actorId: req.user.id,
+      payload: {
+        record,
+      },
+    });
+
     return res.status(201).json({ message: "Onboarding pack ready.", record });
   } catch (error) {
     return handleControllerError(error, res);
@@ -604,6 +850,15 @@ const updateOnboardingPack = asyncHandler(async (req, res) => {
 
   await record.save();
   await touchTeamActivity(team._id);
+
+  publishTeamWorkspaceEvent({
+    teamId: team._id,
+    type: "onboarding_updated",
+    actorId: req.user.id,
+    payload: {
+      record,
+    },
+  });
 
   return res.json({ message: "Onboarding pack updated.", record });
 });
@@ -654,6 +909,15 @@ const createDecisionLogEntry = asyncHandler(async (req, res) => {
       .populate("owner", "name username")
       .populate("createdBy", "name username");
 
+    publishTeamWorkspaceEvent({
+      teamId: team._id,
+      type: "decision_created",
+      actorId: req.user.id,
+      payload: {
+        decision: populated,
+      },
+    });
+
     return res.status(201).json({ message: "Decision logged.", decision: populated });
   } catch (error) {
     return handleControllerError(error, res);
@@ -696,6 +960,15 @@ const updateDecisionLogEntry = asyncHandler(async (req, res) => {
     const populated = await DecisionLog.findById(decision._id)
       .populate("owner", "name username")
       .populate("createdBy", "name username");
+
+    publishTeamWorkspaceEvent({
+      teamId: team._id,
+      type: "decision_updated",
+      actorId: req.user.id,
+      payload: {
+        decision: populated,
+      },
+    });
 
     return res.json({ message: "Decision entry updated.", decision: populated });
   } catch (error) {
@@ -757,6 +1030,15 @@ const createOwnershipEntry = asyncHandler(async (req, res) => {
       .populate("createdBy", "name username")
       .populate("updatedBy", "name username");
 
+    publishTeamWorkspaceEvent({
+      teamId: team._id,
+      type: "ownership_created",
+      actorId: req.user.id,
+      payload: {
+        entry: populated,
+      },
+    });
+
     return res.status(201).json({ message: "Ownership entry created.", entry: populated });
   } catch (error) {
     return handleControllerError(error, res);
@@ -810,10 +1092,46 @@ const updateOwnershipEntry = asyncHandler(async (req, res) => {
       .populate("createdBy", "name username")
       .populate("updatedBy", "name username");
 
+    publishTeamWorkspaceEvent({
+      teamId: team._id,
+      type: "ownership_updated",
+      actorId: req.user.id,
+      payload: {
+        entry: populated,
+      },
+    });
+
     return res.json({ message: "Ownership entry updated.", entry: populated });
   } catch (error) {
     return handleControllerError(error, res);
   }
+});
+
+const streamTeamWorkspaceEvents = asyncHandler(async (req, res) => {
+  const team = await resolveTeamFromRequest(req);
+
+  if (!team) {
+    return res.status(404).json({ message: "Team not found." });
+  }
+
+  const unregister = registerTeamWorkspaceStream({
+    teamId: team._id,
+    userId: req.user.id,
+    res,
+  });
+  let cleanedUp = false;
+
+  const cleanup = () => {
+    if (cleanedUp) {
+      return;
+    }
+
+    cleanedUp = true;
+    unregister();
+  };
+
+  req.on("close", cleanup);
+  req.on("aborted", cleanup);
 });
 
 module.exports = {
@@ -823,6 +1141,7 @@ module.exports = {
   getTeamCapacity,
   updateMemberCapacity,
   getActionCenter,
+  getPerformanceIntelligence,
   listOnboardingPack,
   initOnboardingPackForMember,
   updateOnboardingPack,
@@ -832,4 +1151,5 @@ module.exports = {
   listOwnershipLedger,
   createOwnershipEntry,
   updateOwnershipEntry,
+  streamTeamWorkspaceEvents,
 };

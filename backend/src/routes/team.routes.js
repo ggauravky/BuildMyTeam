@@ -13,7 +13,7 @@ const {
   updateTeamHealth,
   deleteTeam,
 } = require("../controllers/team.controller");
-const { requireAuth } = require("../middleware/auth.middleware");
+const { requireAuth, requireStreamAuth } = require("../middleware/auth.middleware");
 const { requireApprovedUser } = require("../middleware/requireApproved.middleware");
 const {
   requireTeamCreatorOrAdmin,
@@ -30,6 +30,7 @@ const {
 const {
   createTaskSchema,
   updateTaskSchema,
+  performanceWindowQuerySchema,
   updateCapacitySchema,
   updateOnboardingPackSchema,
   createDecisionLogSchema,
@@ -44,6 +45,7 @@ const {
   getTeamCapacity,
   updateMemberCapacity,
   getActionCenter,
+  getPerformanceIntelligence,
   listOnboardingPack,
   initOnboardingPackForMember,
   updateOnboardingPack,
@@ -53,6 +55,7 @@ const {
   listOwnershipLedger,
   createOwnershipEntry,
   updateOwnershipEntry,
+  streamTeamWorkspaceEvents,
 } = require("../controllers/workspace.controller");
 
 const router = express.Router();
@@ -100,6 +103,14 @@ router.get(
   requireApprovedUser,
   requireTeamMemberOrAdmin(),
   getActionCenter
+);
+router.get(
+  "/:id/performance-intelligence",
+  requireAuth,
+  requireApprovedUser,
+  requireTeamMemberOrAdmin(),
+  validate(performanceWindowQuerySchema, "query"),
+  getPerformanceIntelligence
 );
 router.get("/:id/tasks", requireAuth, requireApprovedUser, requireTeamMemberOrAdmin(), listTaskBoard);
 router.post(
@@ -194,6 +205,13 @@ router.patch(
   requireTeamManagerOrAdmin(),
   validate(updateOwnershipEntrySchema),
   updateOwnershipEntry
+);
+router.get(
+  "/:id/workspace/stream",
+  requireStreamAuth,
+  requireApprovedUser,
+  requireTeamMemberOrAdmin(),
+  streamTeamWorkspaceEvents
 );
 router.get(
   "/:id/workspace",

@@ -2,6 +2,7 @@ const express = require("express");
 const {
   createJoinRequestByCode,
   listPendingRequestsForTeam,
+  listRankedJoinRequestsForTeam,
   reviewJoinRequest,
   listMyJoinRequests,
   cancelMyJoinRequest,
@@ -12,7 +13,10 @@ const { requireTeamManagerOrAdmin } = require("../middleware/role.middleware");
 const { joinByCodeLimiter } = require("../middleware/rateLimit.middleware");
 const { validate } = require("../middleware/validate.middleware");
 const { joinByCodeSchema } = require("../validators/team.validator");
-const { reviewJoinRequestSchema } = require("../validators/joinRequest.validator");
+const {
+  reviewJoinRequestSchema,
+  rankedJoinRequestsQuerySchema,
+} = require("../validators/joinRequest.validator");
 
 const router = express.Router();
 
@@ -25,6 +29,12 @@ router.get(
   "/team/:teamId",
   requireTeamManagerOrAdmin((req) => req.params.teamId),
   listPendingRequestsForTeam
+);
+router.get(
+  "/team/:teamId/ranked",
+  requireTeamManagerOrAdmin((req) => req.params.teamId),
+  validate(rankedJoinRequestsQuerySchema, "query"),
+  listRankedJoinRequestsForTeam
 );
 router.patch("/:id/review", validate(reviewJoinRequestSchema), reviewJoinRequest);
 

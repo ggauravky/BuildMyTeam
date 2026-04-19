@@ -3,6 +3,7 @@ const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { NOTIFICATION_PRIORITIES } = require("../utils/constants");
 const { normalizeNotificationPreferences } = require("../services/notification.service");
+const { registerNotificationStream } = require("../services/realtime.service");
 const asyncHandler = require("../utils/asyncHandler");
 
 const NOTIFICATION_PRIORITY_VALUES = Object.values(NOTIFICATION_PRIORITIES);
@@ -157,10 +158,28 @@ const updateNotificationPreferences = asyncHandler(async (req, res) => {
   });
 });
 
+const streamNotifications = (req, res) => {
+  const unregister = registerNotificationStream({ userId: req.user.id, res });
+  let cleanedUp = false;
+
+  const cleanup = () => {
+    if (cleanedUp) {
+      return;
+    }
+
+    cleanedUp = true;
+    unregister();
+  };
+
+  req.on("close", cleanup);
+  req.on("aborted", cleanup);
+};
+
 module.exports = {
   listNotifications,
   markNotificationRead,
   markAllNotificationsRead,
   getNotificationPreferences,
   updateNotificationPreferences,
+  streamNotifications,
 };

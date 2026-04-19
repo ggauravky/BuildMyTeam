@@ -5,12 +5,15 @@ const {
   markAllNotificationsRead,
   getNotificationPreferences,
   updateNotificationPreferences,
+  streamNotifications,
 } = require("../controllers/notification.controller");
-const { requireAuth } = require("../middleware/auth.middleware");
+const { requireAuth, requireStreamAuth } = require("../middleware/auth.middleware");
 const { validate } = require("../middleware/validate.middleware");
 const { updateNotificationPreferencesSchema } = require("../validators/notification.validator");
 
 const router = express.Router();
+
+router.get("/stream", requireStreamAuth, streamNotifications);
 
 router.use(requireAuth);
 

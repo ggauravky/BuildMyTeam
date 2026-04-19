@@ -8,6 +8,11 @@ const reviewJoinRequestSchema = z.object({
     .optional(),
 });
 
+const rankedJoinRequestsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 module.exports = {
   reviewJoinRequestSchema,
+  rankedJoinRequestsQuerySchema,
 };
